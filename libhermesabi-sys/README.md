@@ -27,7 +27,7 @@ brew install cmake git ninja
 Add to your **Cargo.toml**:
 
 ```
-libhermesabi-sys = { git = "https://github.com/rust-hermes/rusty_hermes" path = "libhermesabi-sys" branch = "main" }
+libhermesabi-sys = { git = "https://github.com/rust-hermes/rusty_hermes", branch = "main" }
 ```
 
 ## Examples
