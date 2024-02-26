@@ -1,7 +1,7 @@
 //! # Example
 //!
 //! ```rust
-//! use hermesabi_sys::*;
+//! use libhermesabi_sys::*;
 //! use std::ffi::CString;
 //!
 //! unsafe extern "C" fn release_wrapper(_buf: *mut HermesABIBuffer) {}
