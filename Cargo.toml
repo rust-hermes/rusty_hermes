@@ -11,3 +11,6 @@ keywords = ["javascript", "hermes", "v8", "jsc", "spidermonkey", "engine", "scri
 
 [workspace]
 members = ["libhermesabi-sys"]
+
+[dependencies]
+libhermesabi-sys = { path = "libhermesabi-sys" }

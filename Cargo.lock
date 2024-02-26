@@ -279,6 +279,9 @@ dependencies = [
 [[package]]
 name = "rusty_hermes"
 version = "0.1.0"
+dependencies = [
+ "libhermesabi-sys",
+]
 
 [[package]]
 name = "shlex"
