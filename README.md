@@ -1,11 +1,11 @@
 # rusty_hermes
 
+> [!WARNING]
+> This crate currently only supports on Linux and macOS. Adding Windows support should be trivial.
+
 [Hermes](https://hermesengine.dev) JavaScript engine wrapper for Rust programming language.
 
-> [!WARNING]
-> Currently only supports on Linux and macOS. Adding Windows support should be trivial.
-
-[→ Docs](https://rust-hermes.github.io/rusty_hermes/)
+[→ Browse Docs](https://rust-hermes.github.io/rusty_hermes/)
 
 Crates:
 
