@@ -9,6 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        submodules: true
       - name: Build
         run: cargo build --verbose
       - name: Build Docs
