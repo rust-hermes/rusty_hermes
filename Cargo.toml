@@ -7,7 +7,7 @@ authors = ["Rust Hermes, Mish Ushakov <mishushakov@users.noreply.github.com>"]
 repository = "https://github.com/rust-hermes/rusty_hermes"
 license = "MIT"
 categories = [ "API bindings" ]
-keywords = ["javascript", "hermes", "v8", "jsc", "spidermonkey", "engine", "scripting"]
+keywords = ["javascript", "hermes", "v8", "jsc", "spidermonkey"]
 
 [workspace]
 members = ["libhermesabi-sys"]

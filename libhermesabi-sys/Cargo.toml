@@ -1,6 +1,7 @@
 [package]
 name = "libhermesabi-sys"
-version = "0.1.0"
+description = "Bindgen bindings for Hermes JavaScript engine"
+version = "0.1.1"
 edition = "2021"
 authors = ["Rust Hermes, Mish Ushakov <mishushakov@users.noreply.github.com>"]
 repository = "https://github.com/rust-hermes/rusty_hermes"

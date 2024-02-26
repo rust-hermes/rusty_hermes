@@ -1,12 +1,10 @@
 # libhermesabi-sys
 
-> Note: Currently only supports on Linux and macOS. Adding Windows support should be non-trivial.
+> Note: Currently only supports on Linux and macOS. Adding Windows support should be trivial.
 
 This crate contains bindgen-generated Rust bindings for [Hermes](https://hermesengine.dev) C ABI.
 
-## Requirements
-
-Before building Hermes, install the required dependencies:
+Install the required dependencies:
 
 **Ubuntu**
 
@@ -24,6 +22,12 @@ pacman -S cmake git ninja icu python zip readline
 
 ```
 brew install cmake git ninja
+```
+
+Add to your **Cargo.toml**:
+
+```
+libhermesabi-sys = { git = "https://github.com/rust-hermes/rusty_hermes" path = "libhermesabi-sys" branch = "main" }
 ```
 
 ## Examples
