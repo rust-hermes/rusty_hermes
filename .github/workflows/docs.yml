@@ -1,3 +1,4 @@
+# From: https://www.reddit.com/r/rust/comments/195ao81/comment/khm4xqa/
 name: Build docs
 on:
   push:
@@ -19,10 +20,13 @@ jobs:
         run: cargo doc
       - name: Add redirect
         run: echo '<meta http-equiv="refresh" content="0;url=rusty_hermes/index.html">' > target/doc/index.html
+      - name: Remove lock file
+        run: rm target/doc/.lock
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: target/doc
+
   deploy:
     needs: build
     permissions:
