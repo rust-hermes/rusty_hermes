@@ -24,7 +24,7 @@ fn main() {
         .clang_arg(format!("-I{}/API/hermes_abi", hermes_src_dir))
         .allowlist_function(".*") // Avoids junk
         .layout_tests(false)
-        .rustified_enum(".*") // enums: HermesABIValueKind, HermesABIErrorCode
+        // .rustified_enum(".*") // enums: HermesABIValueKind, HermesABIErrorCode
         .generate()
         .expect("Unable to generate bindings");
 
