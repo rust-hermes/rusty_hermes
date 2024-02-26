@@ -2,7 +2,7 @@
 
 > Note: Currently only supports on Linux and macOS. Adding Windows support should be trivial.
 
-This crate contains bindgen-generated Rust bindings for [Hermes](https://hermesengine.dev) C ABI.
+This crate contains Rust bindings for [Hermes](https://hermesengine.dev) C ABI.
 
 Install the required dependencies:
 
