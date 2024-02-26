@@ -6,7 +6,7 @@
 //!
 //! unsafe extern "C" fn release_wrapper(_buf: *mut HermesABIBuffer) {}
 //!
-//! fn init_runtime() {
+//! fn main() {
 //!     unsafe {
 //!         let vtable_ptr = get_hermes_abi_vtable();
 //!         let vtable = &*vtable_ptr;
