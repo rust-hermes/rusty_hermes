@@ -1,6 +1,7 @@
 # libhermesabi-sys
 
-> Note: Currently only supports on Linux and macOS. Adding Windows support should be trivial.
+> [!WARNING]
+> This crate currently only supports Linux and macOS. Adding Windows support should be trivial.
 
 This crate contains Rust bindings for [Hermes](https://hermesengine.dev) C ABI.
 
