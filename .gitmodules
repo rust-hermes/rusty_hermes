@@ -1,0 +1,3 @@
+[submodule "libhermesabi-sys/hermes"]
+	path = libhermesabi-sys/hermes
+	url = https://github.com/facebook/hermes

@@ -1,0 +1,15 @@
+[package]
+name = "libhermesabi-sys"
+version = "0.1.0"
+edition = "2021"
+authors = ["Rust Hermes, Mish Ushakov <mishushakov@users.noreply.github.com>"]
+repository = "https://github.com/rust-hermes/rusty_hermes"
+license = "MIT"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+[build-dependencies]
+bindgen = "0.65.1"
+cmake = "0.1"
