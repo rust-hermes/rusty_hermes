@@ -3,9 +3,54 @@
 > [!WARNING]
 > This crate currently only supports Linux and macOS. Adding Windows support should be trivial.
 
-This crate contains Rust bindings for [Hermes](https://hermesengine.dev) C ABI.
+Low-level Rust FFI bindings for the [Hermes](https://hermesengine.dev) JavaScript engine.
 
-Install the required dependencies:
+Provides flat `extern "C"` functions wrapping the Hermes JSI C++ API (rusty_v8 style). Pointer types (String, Object, Array, etc.) are represented as opaque `*mut c_void` handles that must be explicitly released.
+
+For a safe, high-level API, see [`rusty_hermes`](../).
+
+## Example
+
+```rust
+use libhermesabi_sys::*;
+
+unsafe {
+    let rt = hermes__Runtime__New();
+
+    let script = b"1 + 2";
+    let url = b"test.js";
+
+    let result = hermes__Runtime__EvaluateJavaScript(
+        rt,
+        script.as_ptr(),
+        script.len(),
+        url.as_ptr() as *const i8,
+        url.len(),
+    );
+
+    assert_eq!(result.kind, HermesValueKind_Number);
+    assert_eq!(result.data.number, 3.0);
+
+    hermes__Runtime__Delete(rt);
+}
+```
+
+## API surface
+
+- **Runtime** — create, delete, evaluate JS, drain microtasks, get global object
+- **String** — create from UTF-8/ASCII, convert to UTF-8, equality, release
+- **PropNameID** — create from string/UTF-8/ASCII, convert to UTF-8, equality, release
+- **Object** — create, get/set/has property, property names, type checks (array, function, arraybuffer), instanceof, release
+- **Array** — create, size, get/set by index, release
+- **Function** — call, call as constructor, create from host function, release
+- **Value** — release, strict equality
+- **Symbol** — to string, equality, release
+- **BigInt** — create from i64/u64, type checks, truncate, release
+- **WeakObject** — create, lock, release
+
+## Installation
+
+Install the required build dependencies:
 
 **Ubuntu**
 
@@ -27,53 +72,6 @@ brew install cmake git ninja
 
 Add to your **Cargo.toml**:
 
-```
+```toml
 libhermesabi-sys = { git = "https://github.com/rust-hermes/rusty_hermes", branch = "main" }
-```
-
-## Examples
-
-```rust
-use libhermesabi_sys::*;
-use std::ffi::CString;
-
-unsafe extern "C" fn release_wrapper(_buf: *mut HermesABIBuffer) {}
-
-fn main() {
-    unsafe {
-        let vtable_ptr = get_hermes_abi_vtable();
-        let vtable = &*vtable_ptr;
-
-        let config = std::ptr::null();
-        let runtime_ptr = (vtable.make_hermes_runtime.unwrap())(config);
-
-        let runtime = &*runtime_ptr;
-        let runtime_vt = &*runtime.vt;
-
-        let script = String::from("x = 1 + 2");
-        let script_url = CString::new("./src/test.js").expect("CString::new failed");
-
-        let vtable = HermesABIBufferVTable {
-            release: Some(release_wrapper),
-        };
-
-        let mut x = HermesABIBuffer {
-            vtable: &vtable,
-            data: script.as_ptr(),
-            size: script.len(),
-        };
-
-        let buffer_ptr = &mut x as *mut HermesABIBuffer;
-
-        let eval = runtime_vt.evaluate_javascript_source.unwrap();
-        let v = eval(
-            runtime_ptr,
-            buffer_ptr,
-            script_url.as_ptr(),
-            script_url.as_bytes().len(),
-        );
-
-        assert_eq!(v.value.data.number, 3.0);
-    }
-}
 ```
