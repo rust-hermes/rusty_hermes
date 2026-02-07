@@ -87,10 +87,7 @@ template <typename T>
 static void* steal_pointer(T&& val) {
   RuntimeAccessor::PV* pv =
       RuntimeAccessor::getPointerValue(static_cast<jsi::Pointer&>(val));
-  // Null out the C++ side so ~Pointer() won't call invalidate().
-  // Pointer has a single member ptr_. We use the same trick as the rvalue
-  // getters in jsi.h (e.g., Value::getString(Runtime&) &&).
-  // Since Pointer layout is just { PointerValue* ptr_; }, we can null it:
+  // Null the Pointer's internal ptr_ so ~Pointer() won't call invalidate().
   *reinterpret_cast<void**>(&val) = nullptr;
   return static_cast<void*>(pv);
 }
@@ -113,27 +110,9 @@ static HermesValue jsi_value_to_c(jsi::Value&& val) {
     result.data.number = val.getNumber();
   } else if (val.isSymbol()) {
     result.kind = HermesValueKind_Symbol;
-    // Extract the PointerValue* from the Value's internal Pointer.
     const RuntimeAccessor::PV* pv = RuntimeAccessor::getPointerValue(val);
     result.data.pointer = const_cast<void*>(static_cast<const void*>(pv));
-    // Null out the Value's pointer to prevent invalidation on destruction.
-    // Value's internal data_.pointer.ptr_ is at the same offset as data_.pointer.
-    // We need to reach into the Value and null its PointerValue*.
-    // Since we can't easily reach in, we use a trick: move the value into
-    // a temporary of the specific type, then steal from that.
-    // Actually simpler: just memset the pointer region in the Value.
-    // The Value is { kind_, Data { bool|double|Pointer } } where Pointer is { PointerValue* }.
-    // After extracting the pointer, we null it so ~Value() is a no-op.
-    // Value has kind_ (int) + padding + data_ (8 bytes). data_.pointer.ptr_ is at &data_.
-    // We can't portably access this, so let's use a different approach:
-    // move-construct into the specific type to steal ownership.
-    // But Value doesn't let us do that either from the outside.
-    //
-    // Safest approach: clone the PV so the Value can safely destruct.
-    // Actually, we CAN just reach in. Value layout: { ValueKind kind_; Data data_; }
-    // Data is a union of { bool, double, Pointer }. Pointer is { PointerValue* ptr_ }.
-    // So data_.pointer.ptr_ is at offset sizeof(ValueKind) within Value, padded to 8.
-    // Let's just reach in and null the pointer:
+    // Null the Value's internal pointer so ~Value() won't invalidate the PV.
     struct ValueLayout {
       int kind_;
       union {

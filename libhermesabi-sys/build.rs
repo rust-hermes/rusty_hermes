@@ -8,8 +8,8 @@ fn main() {
         PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let hermes_src = manifest_dir.join(hermes_src_dir);
 
-    println!("cargo:rerun-if-changed=src/bindings/binding.cc");
-    println!("cargo:rerun-if-changed=src/bindings/binding.hpp");
+    println!("cargo:rerun-if-changed=src/binding.cc");
+    println!("cargo:rerun-if-changed=src/binding.hpp");
     println!("cargo:rerun-if-changed={}/", hermes_src_dir);
 
     // Build Hermes via cmake, targeting libhermes (JSI implementation).
@@ -25,11 +25,11 @@ fn main() {
     // Compile our C++ binding layer with the cc crate.
     cc::Build::new()
         .cpp(true)
-        .file("src/bindings/binding.cc")
+        .file("src/binding.cc")
         .include(hermes_src.join("API"))
         .include(hermes_src.join("API/jsi"))
         .include(hermes_src.join("public"))
-        .include("src/bindings")
+        .include("src")
         .flag("-std=c++17")
         .flag("-fexceptions")
         .flag("-frtti")
