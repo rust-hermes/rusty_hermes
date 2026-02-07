@@ -22,6 +22,9 @@ fn main() {
 
     let hermes_build_dir = format!("{}/build", hermes_build.display());
 
+    // Expose the build directory to dependent crates via DEP_HERMESABI_BUILD_DIR.
+    println!("cargo:build_dir={}", hermes_build_dir);
+
     // Compile our C++ binding layer with the cc crate.
     cc::Build::new()
         .cpp(true)
