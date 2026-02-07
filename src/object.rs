@@ -25,6 +25,7 @@ impl<'rt> Object<'rt> {
     }
 
     /// Wrap a raw pointer returned from FFI.
+    #[allow(dead_code)]
     pub(crate) unsafe fn from_raw(rt: *mut HermesRt, pv: *mut std::ffi::c_void) -> Self {
         Object {
             pv,
