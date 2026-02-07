@@ -37,16 +37,21 @@ unsafe {
 
 ## API surface
 
-- **Runtime** — create, delete, evaluate JS, drain microtasks, get global object
+- **Runtime** — create (default/custom config), delete, evaluate JS, evaluate with source map, drain microtasks, get global object, parse JSON, description, inspectable
+- **RuntimeConfig** — eval, Promise, Proxy, Class, Intl, microtask queue, generators, block scoping, HermesInternal, max registers
+- **PreparedJavaScript** — prepare, evaluate, delete
+- **Scope** — push/pop handle scopes
 - **String** — create from UTF-8/ASCII, convert to UTF-8, equality, release
-- **PropNameID** — create from string/UTF-8/ASCII, convert to UTF-8, equality, release
-- **Object** — create, get/set/has property, property names, type checks (array, function, arraybuffer), instanceof, release
+- **PropNameID** — create from string/UTF-8/ASCII/symbol, convert to UTF-8, equality, release
+- **Object** — create, get/set/has property (string and PropNameID keys), property names, type checks, instanceof, external memory pressure, NativeState (has/get/set), HostObject (create/get/is), release
 - **Array** — create, size, get/set by index, release
-- **Function** — call, call as constructor, create from host function, release
-- **Value** — release, strict equality
+- **ArrayBuffer** — create, size, data pointer
+- **Function** — call (with/without this), call as constructor, create from host function, is host function, release
+- **Value** — release, strict equality, to string, clone
 - **Symbol** — to string, equality, release
-- **BigInt** — create from i64/u64, type checks, truncate, release
+- **BigInt** — create from i64/u64, type checks, truncate, to string, equality, release
 - **WeakObject** — create, lock, release
+- **Hermes-specific** — bytecode check/version/sanity/prefetch, time limits (watch/unwatch/trigger), sampling profiler (enable/disable/dump)
 
 ## Installation
 

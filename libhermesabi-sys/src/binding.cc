@@ -273,6 +273,141 @@ class Borrowed {
   T val_;
 };
 
+// ---------------------------------------------------------------------------
+// Helper classes for HostObject, NativeState, ArrayBuffer, PreparedJS
+// ---------------------------------------------------------------------------
+
+class OwnedMutableBuffer : public jsi::MutableBuffer {
+  std::vector<uint8_t> buf_;
+ public:
+  explicit OwnedMutableBuffer(size_t size) : buf_(size, 0) {}
+  size_t size() const override { return buf_.size(); }
+  uint8_t* data() override { return buf_.data(); }
+};
+
+class CNativeState : public jsi::NativeState {
+  void* data_;
+  HermesNativeStateFinalizer finalizer_;
+ public:
+  CNativeState(void* data, HermesNativeStateFinalizer fin)
+      : data_(data), finalizer_(fin) {}
+  ~CNativeState() override {
+    if (finalizer_ && data_) finalizer_(data_);
+  }
+  void* data() const { return data_; }
+};
+
+class CHostObject : public jsi::HostObject {
+  HermesRt* hrt_;
+  HermesHostObjectGetCallback get_cb_;
+  HermesHostObjectSetCallback set_cb_;
+  HermesHostObjectGetPropertyNamesCallback get_names_cb_;
+  void* user_data_;
+  HermesHostObjectFinalizer finalizer_;
+
+ public:
+  CHostObject(HermesRt* hrt,
+              HermesHostObjectGetCallback get_cb,
+              HermesHostObjectSetCallback set_cb,
+              HermesHostObjectGetPropertyNamesCallback get_names_cb,
+              void* user_data,
+              HermesHostObjectFinalizer finalizer)
+      : hrt_(hrt), get_cb_(get_cb), set_cb_(set_cb),
+        get_names_cb_(get_names_cb), user_data_(user_data),
+        finalizer_(finalizer) {}
+
+  ~CHostObject() override {
+    if (finalizer_ && user_data_) {
+      finalizer_(user_data_);
+    }
+  }
+
+  void* userData() const { return user_data_; }
+
+  jsi::Value get(jsi::Runtime& /*runtime*/,
+                 const jsi::PropNameID& name) override {
+    const void* name_pv = RuntimeAccessor::getPointerValue(name);
+    HermesValue result = get_cb_(hrt_, name_pv, user_data_);
+    switch (result.kind) {
+      case HermesValueKind_Undefined: return jsi::Value::undefined();
+      case HermesValueKind_Null: return jsi::Value(nullptr);
+      case HermesValueKind_Boolean: return jsi::Value(result.data.boolean);
+      case HermesValueKind_Number: return jsi::Value(result.data.number);
+      case HermesValueKind_Symbol:
+        return jsi::Value(RuntimeAccessor::make<jsi::Symbol>(
+            static_cast<RuntimeAccessor::PV*>(result.data.pointer)));
+      case HermesValueKind_BigInt:
+        return jsi::Value(RuntimeAccessor::make<jsi::BigInt>(
+            static_cast<RuntimeAccessor::PV*>(result.data.pointer)));
+      case HermesValueKind_String:
+        return jsi::Value(RuntimeAccessor::make<jsi::String>(
+            static_cast<RuntimeAccessor::PV*>(result.data.pointer)));
+      case HermesValueKind_Object:
+        return jsi::Value(RuntimeAccessor::make<jsi::Object>(
+            static_cast<RuntimeAccessor::PV*>(result.data.pointer)));
+    }
+    return jsi::Value::undefined();
+  }
+
+  void set(jsi::Runtime& /*runtime*/, const jsi::PropNameID& name,
+           const jsi::Value& value) override {
+    const void* name_pv = RuntimeAccessor::getPointerValue(name);
+    HermesValue c_val;
+    if (value.isUndefined()) {
+      c_val.kind = HermesValueKind_Undefined;
+      c_val.data.number = 0;
+    } else if (value.isNull()) {
+      c_val.kind = HermesValueKind_Null;
+      c_val.data.number = 0;
+    } else if (value.isBool()) {
+      c_val.kind = HermesValueKind_Boolean;
+      c_val.data.boolean = value.getBool();
+    } else if (value.isNumber()) {
+      c_val.kind = HermesValueKind_Number;
+      c_val.data.number = value.getNumber();
+    } else if (value.isString()) {
+      c_val.kind = HermesValueKind_String;
+      c_val.data.pointer = const_cast<void*>(
+          static_cast<const void*>(RuntimeAccessor::getPointerValue(value)));
+    } else if (value.isObject()) {
+      c_val.kind = HermesValueKind_Object;
+      c_val.data.pointer = const_cast<void*>(
+          static_cast<const void*>(RuntimeAccessor::getPointerValue(value)));
+    } else if (value.isSymbol()) {
+      c_val.kind = HermesValueKind_Symbol;
+      c_val.data.pointer = const_cast<void*>(
+          static_cast<const void*>(RuntimeAccessor::getPointerValue(value)));
+    } else if (value.isBigInt()) {
+      c_val.kind = HermesValueKind_BigInt;
+      c_val.data.pointer = const_cast<void*>(
+          static_cast<const void*>(RuntimeAccessor::getPointerValue(value)));
+    } else {
+      c_val.kind = HermesValueKind_Undefined;
+      c_val.data.number = 0;
+    }
+    set_cb_(hrt_, name_pv, &c_val, user_data_);
+  }
+
+  std::vector<jsi::PropNameID> getPropertyNames(
+      jsi::Runtime& /*runtime*/) override {
+    size_t count = 0;
+    void** names = get_names_cb_(hrt_, &count, user_data_);
+    std::vector<jsi::PropNameID> result;
+    result.reserve(count);
+    for (size_t i = 0; i < count; i++) {
+      // Each entry is an OWNED PropNameID PV.
+      result.push_back(RuntimeAccessor::make<jsi::PropNameID>(
+          static_cast<RuntimeAccessor::PV*>(names[i])));
+    }
+    free(names);
+    return result;
+  }
+};
+
+struct HermesPreparedJs {
+  std::shared_ptr<const jsi::PreparedJavaScript> prepared;
+};
+
 // ===========================================================================
 // extern "C" implementations
 // ===========================================================================
@@ -286,6 +421,25 @@ extern "C" {
 HermesRt* hermes__Runtime__New(void) {
   auto hrt = new HermesRt();
   hrt->runtime = facebook::hermes::makeHermesRuntime();
+  return hrt;
+}
+
+HermesRt* hermes__Runtime__NewWithConfig(const HermesRuntimeConfig* cfg) {
+  auto builder = ::hermes::vm::RuntimeConfig::Builder()
+      .withEnableEval(cfg->enable_eval)
+      .withES6Promise(cfg->es6_promise)
+      .withES6Proxy(cfg->es6_proxy)
+      .withES6Class(cfg->es6_class)
+      .withIntl(cfg->intl)
+      .withMicrotaskQueue(cfg->microtask_queue)
+      .withEnableGenerator(cfg->enable_generator)
+      .withEnableBlockScoping(cfg->enable_block_scoping)
+      .withEnableHermesInternal(cfg->enable_hermes_internal)
+      .withEnableHermesInternalTestMethods(cfg->enable_hermes_internal_test_methods)
+      .withMaxNumRegisters(cfg->max_num_registers);
+
+  auto hrt = new HermesRt();
+  hrt->runtime = facebook::hermes::makeHermesRuntime(builder.build());
   return hrt;
 }
 
@@ -971,7 +1125,230 @@ void hermes__WeakObject__Release(void* pv) {
 }
 
 // ---------------------------------------------------------------------------
-// HermesRuntime-specific (static)
+// PropNameID (new)
+// ---------------------------------------------------------------------------
+
+void* hermes__PropNameID__ForSymbol(HermesRt* hrt, const void* sym) {
+  HERMES_TRY(hrt)
+  Borrowed<jsi::Symbol> s(sym);
+  jsi::PropNameID pni = jsi::PropNameID::forSymbol(rt(hrt), s.get());
+  return steal_pointer(std::move(pni));
+  HERMES_CATCH_PTR(hrt)
+}
+
+// ---------------------------------------------------------------------------
+// Value (new)
+// ---------------------------------------------------------------------------
+
+void* hermes__Value__ToString(HermesRt* hrt, const struct HermesValue* val) {
+  HERMES_TRY(hrt)
+  jsi::Value v = c_to_jsi_value(rt(hrt), val);
+  jsi::String str = v.toString(rt(hrt));
+  return steal_pointer(std::move(str));
+  HERMES_CATCH_PTR(hrt)
+}
+
+struct HermesValue hermes__Value__Clone(
+    HermesRt* hrt, const struct HermesValue* val) {
+  HERMES_TRY(hrt)
+  jsi::Value v = c_to_jsi_value(rt(hrt), val);
+  return jsi_value_to_c(std::move(v));
+  HERMES_CATCH_VALUE(hrt)
+}
+
+// ---------------------------------------------------------------------------
+// JSON
+// ---------------------------------------------------------------------------
+
+struct HermesValue hermes__Runtime__CreateValueFromJsonUtf8(
+    HermesRt* hrt, const uint8_t* json, size_t len) {
+  HERMES_TRY(hrt)
+  jsi::Value v = jsi::Value::createFromJsonUtf8(rt(hrt), json, len);
+  return jsi_value_to_c(std::move(v));
+  HERMES_CATCH_VALUE(hrt)
+}
+
+// ---------------------------------------------------------------------------
+// BigInt (new)
+// ---------------------------------------------------------------------------
+
+void* hermes__BigInt__ToString(HermesRt* hrt, const void* bi, int radix) {
+  HERMES_TRY(hrt)
+  Borrowed<jsi::BigInt> b(bi);
+  jsi::String str = b.get().toString(rt(hrt), radix);
+  return steal_pointer(std::move(str));
+  HERMES_CATCH_PTR(hrt)
+}
+
+bool hermes__BigInt__StrictEquals(
+    HermesRt* hrt, const void* a, const void* b) {
+  Borrowed<jsi::BigInt> ba(a);
+  Borrowed<jsi::BigInt> bb(b);
+  return jsi::BigInt::strictEquals(rt(hrt), ba.get(), bb.get());
+}
+
+// ---------------------------------------------------------------------------
+// ArrayBuffer
+// ---------------------------------------------------------------------------
+
+void* hermes__ArrayBuffer__New(HermesRt* hrt, size_t size) {
+  HERMES_TRY(hrt)
+  auto buffer = std::make_shared<OwnedMutableBuffer>(size);
+  jsi::ArrayBuffer ab(*hrt->runtime, std::move(buffer));
+  return steal_pointer(std::move(ab));
+  HERMES_CATCH_PTR(hrt)
+}
+
+size_t hermes__ArrayBuffer__Size(HermesRt* hrt, const void* buf) {
+  Borrowed<jsi::ArrayBuffer> ab(buf);
+  return ab.get().size(rt(hrt));
+}
+
+uint8_t* hermes__ArrayBuffer__Data(HermesRt* hrt, const void* buf) {
+  Borrowed<jsi::ArrayBuffer> ab(buf);
+  return ab.get().data(rt(hrt));
+}
+
+// ---------------------------------------------------------------------------
+// Object extensions (NativeState, HostObject, ExternalMemory)
+// ---------------------------------------------------------------------------
+
+void hermes__Object__SetExternalMemoryPressure(
+    HermesRt* hrt, const void* obj, size_t amount) {
+  Borrowed<jsi::Object> o(obj);
+  o.get().setExternalMemoryPressure(rt(hrt), amount);
+}
+
+bool hermes__Object__HasNativeState(HermesRt* hrt, const void* obj) {
+  Borrowed<jsi::Object> o(obj);
+  return o.get().hasNativeState(rt(hrt));
+}
+
+void* hermes__Object__GetNativeState(HermesRt* hrt, const void* obj) {
+  Borrowed<jsi::Object> o(obj);
+  auto state = o.get().getNativeState<CNativeState>(rt(hrt));
+  return state ? state->data() : nullptr;
+}
+
+void hermes__Object__SetNativeState(HermesRt* hrt, const void* obj,
+    void* data, HermesNativeStateFinalizer finalizer) {
+  HERMES_TRY(hrt)
+  Borrowed<jsi::Object> o(obj);
+  auto state = std::make_shared<CNativeState>(data, finalizer);
+  o.get().setNativeState(rt(hrt), std::move(state));
+  HERMES_CATCH_VOID(hrt)
+}
+
+void* hermes__Object__CreateFromHostObject(
+    HermesRt* hrt,
+    HermesHostObjectGetCallback get_cb,
+    HermesHostObjectSetCallback set_cb,
+    HermesHostObjectGetPropertyNamesCallback get_names_cb,
+    void* user_data,
+    HermesHostObjectFinalizer finalizer) {
+  HERMES_TRY(hrt)
+  auto ho = std::make_shared<CHostObject>(
+      hrt, get_cb, set_cb, get_names_cb, user_data, finalizer);
+  jsi::Object obj = jsi::Object::createFromHostObject(rt(hrt), std::move(ho));
+  return steal_pointer(std::move(obj));
+  HERMES_CATCH_PTR(hrt)
+}
+
+void* hermes__Object__GetHostObject(HermesRt* hrt, const void* obj) {
+  Borrowed<jsi::Object> o(obj);
+  auto ho = o.get().getHostObject<CHostObject>(rt(hrt));
+  return ho ? ho->userData() : nullptr;
+}
+
+bool hermes__Object__IsHostObject(HermesRt* hrt, const void* obj) {
+  Borrowed<jsi::Object> o(obj);
+  return o.get().isHostObject(rt(hrt));
+}
+
+// ---------------------------------------------------------------------------
+// PreparedJavaScript
+// ---------------------------------------------------------------------------
+
+HermesPreparedJs* hermes__Runtime__PrepareJavaScript(
+    HermesRt* hrt, const uint8_t* data, size_t len,
+    const char* url, size_t url_len) {
+  HERMES_TRY(hrt)
+  std::string source_url(url, url_len);
+  auto buf = std::make_shared<jsi::StringBuffer>(
+      std::string(reinterpret_cast<const char*>(data), len));
+  auto prepared = hrt->runtime->prepareJavaScript(buf, std::move(source_url));
+  auto result = new HermesPreparedJs();
+  result->prepared = std::move(prepared);
+  return result;
+  HERMES_CATCH_PTR(hrt)
+}
+
+struct HermesValue hermes__Runtime__EvaluatePreparedJavaScript(
+    HermesRt* hrt, const HermesPreparedJs* prepared) {
+  HERMES_TRY(hrt)
+  jsi::Value result =
+      hrt->runtime->evaluatePreparedJavaScript(prepared->prepared);
+  return jsi_value_to_c(std::move(result));
+  HERMES_CATCH_VALUE(hrt)
+}
+
+void hermes__PreparedJavaScript__Delete(HermesPreparedJs* prepared) {
+  delete prepared;
+}
+
+// ---------------------------------------------------------------------------
+// Scope
+// ---------------------------------------------------------------------------
+
+void* hermes__Scope__New(HermesRt* hrt) {
+  return new jsi::Scope(*hrt->runtime);
+}
+
+void hermes__Scope__Delete(void* scope) {
+  delete static_cast<jsi::Scope*>(scope);
+}
+
+// ---------------------------------------------------------------------------
+// Runtime info
+// ---------------------------------------------------------------------------
+
+size_t hermes__Runtime__Description(HermesRt* hrt, char* buf, size_t buf_len) {
+  std::string desc = hrt->runtime->description();
+  size_t needed = desc.size();
+  if (buf && buf_len > 0) {
+    size_t to_copy = needed < buf_len ? needed : buf_len;
+    memcpy(buf, desc.data(), to_copy);
+  }
+  return needed;
+}
+
+bool hermes__Runtime__IsInspectable(HermesRt* hrt) {
+  return hrt->runtime->isInspectable();
+}
+
+// ---------------------------------------------------------------------------
+// Evaluate with source map
+// ---------------------------------------------------------------------------
+
+struct HermesValue hermes__Runtime__EvaluateJavaScriptWithSourceMap(
+    HermesRt* hrt,
+    const uint8_t* data, size_t len,
+    const uint8_t* source_map, size_t source_map_len,
+    const char* url, size_t url_len) {
+  HERMES_TRY(hrt)
+  std::string source_url(url, url_len);
+  auto code_buf = std::make_shared<jsi::StringBuffer>(
+      std::string(reinterpret_cast<const char*>(data), len));
+  auto map_buf = std::make_shared<jsi::StringBuffer>(
+      std::string(reinterpret_cast<const char*>(source_map), source_map_len));
+  jsi::Value result = hrt->runtime->evaluateJavaScriptWithSourceMap(
+      code_buf, map_buf, source_url);
+  return jsi_value_to_c(std::move(result));
+  HERMES_CATCH_VALUE(hrt)
+}
+
+// ---------------------------------------------------------------------------
+// HermesRuntime-specific
 // ---------------------------------------------------------------------------
 
 bool hermes__IsHermesBytecode(const uint8_t* data, size_t len) {
@@ -980,6 +1357,38 @@ bool hermes__IsHermesBytecode(const uint8_t* data, size_t len) {
 
 uint32_t hermes__GetBytecodeVersion(void) {
   return facebook::hermes::HermesRuntime::getBytecodeVersion();
+}
+
+void hermes__PrefetchHermesBytecode(const uint8_t* data, size_t len) {
+  facebook::hermes::HermesRuntime::prefetchHermesBytecode(data, len);
+}
+
+bool hermes__HermesBytecodeSanityCheck(const uint8_t* data, size_t len) {
+  return facebook::hermes::HermesRuntime::hermesBytecodeSanityCheck(data, len);
+}
+
+void hermes__Runtime__WatchTimeLimit(HermesRt* hrt, uint32_t timeout_ms) {
+  hrt->runtime->watchTimeLimit(timeout_ms);
+}
+
+void hermes__Runtime__UnwatchTimeLimit(HermesRt* hrt) {
+  hrt->runtime->unwatchTimeLimit();
+}
+
+void hermes__Runtime__AsyncTriggerTimeout(HermesRt* hrt) {
+  hrt->runtime->asyncTriggerTimeout();
+}
+
+void hermes__EnableSamplingProfiler(void) {
+  facebook::hermes::HermesRuntime::enableSamplingProfiler();
+}
+
+void hermes__DisableSamplingProfiler(void) {
+  facebook::hermes::HermesRuntime::disableSamplingProfiler();
+}
+
+void hermes__DumpSampledTraceToFile(const char* filename) {
+  facebook::hermes::HermesRuntime::dumpSampledTraceToFile(std::string(filename));
 }
 
 } // extern "C"

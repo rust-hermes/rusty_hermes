@@ -31,11 +31,21 @@ assert_eq!(result.as_number(), Some(30.0));
 
 ## Features
 
-- Evaluate JavaScript and get typed results (numbers, strings, booleans, objects, arrays)
-- Register Rust functions as JS host functions with automatic type conversion
-- Manipulate JS objects and arrays from Rust
-- Lifetime-based safety — all JS values are tied to their `Runtime`, preventing use-after-free at compile time
-- Error handling with `Result` types for JS exceptions and type errors
+- **Evaluate JavaScript** — eval strings, prepared scripts, and JSON
+- **Type-safe values** — numbers, strings, booleans, objects, arrays, symbols, bigints, arraybuffers
+- **Host functions** — register Rust closures as JS functions with automatic type conversion (up to 8 args)
+- **Host objects** — create JS objects backed by Rust callbacks for custom get/set/property enumeration
+- **Object manipulation** — get/set/has properties (string and PropNameId keys), property enumeration, instanceof, NativeState
+- **ArrayBuffer** — create, read, and write raw byte buffers
+- **PreparedJavaScript** — pre-compile scripts for repeated evaluation
+- **Scope** — RAII handle scopes for GC pressure management
+- **WeakObject** — weak references to JS objects
+- **RuntimeConfig** — builder pattern for configuring eval, Promise, Proxy, Intl, microtask queue, etc.
+- **Execution limits** — watch/unwatch time limits for runaway scripts
+- **Bytecode utilities** — check, validate, and prefetch Hermes bytecode
+- **Sampling profiler** — enable/disable profiling and dump traces
+- **Lifetime safety** — all JS values carry a `'rt` lifetime tied to their `Runtime`, preventing use-after-free at compile time
+- **Error handling** — `Result` types for JS exceptions and type errors
 
 ## Installation
 
@@ -73,4 +83,5 @@ Run the examples with:
 cargo run --example hello
 cargo run --example host_functions
 cargo run --example objects_and_arrays
+cargo run --example advanced
 ```

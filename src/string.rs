@@ -26,6 +26,21 @@ impl<'rt> JsString<'rt> {
         }
     }
 
+    /// Create a JS string from an ASCII `&str`.
+    ///
+    /// Slightly more efficient than [`new`](Self::new) when the input is known
+    /// to be pure ASCII.
+    pub fn from_ascii(rt: &'rt Runtime, s: &str) -> Self {
+        let pv = unsafe {
+            hermes__String__CreateFromAscii(rt.raw, s.as_ptr() as *const i8, s.len())
+        };
+        JsString {
+            pv,
+            rt: rt.raw,
+            _marker: PhantomData,
+        }
+    }
+
     /// Extract the contents as a Rust `String`.
     pub fn to_rust_string(&self) -> Result<String> {
         // First call to get the required buffer size.

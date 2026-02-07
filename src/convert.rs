@@ -107,24 +107,7 @@ impl<'rt, T: IntoJs<'rt>> IntoJs<'rt> for Vec<T> {
 
 impl<'rt> FromJs<'rt> for Value<'rt> {
     fn from_js(_rt: &'rt Runtime, value: &Value<'rt>) -> Result<Self> {
-        // Clone the raw value. For pointer types this means the caller's value
-        // and ours both reference the same PointerValue — but since c_to_jsi_value
-        // on the C side clones, we reconstruct a fresh owning copy here.
-        //
-        // For primitives we can just copy the bits.
-        Ok(match value.kind() {
-            crate::value::ValueKind::Undefined => Value::undefined(),
-            crate::value::ValueKind::Null => Value::null(),
-            crate::value::ValueKind::Boolean => Value::from_bool(value.as_bool().unwrap()),
-            crate::value::ValueKind::Number => Value::from_number(value.as_number().unwrap()),
-            _ => {
-                // For pointer types, we can't safely clone without runtime support.
-                // Return an error for now.
-                return Err(Error::RuntimeError(
-                    "FromJs for pointer types requires consuming the Value".into(),
-                ));
-            }
-        })
+        Ok(value.duplicate())
     }
 }
 

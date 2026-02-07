@@ -49,6 +49,27 @@ impl<'rt> Function<'rt> {
         Ok(unsafe { Value::from_raw(self.rt, raw) })
     }
 
+    /// Call this function with a specific `this` value.
+    pub fn call_with_this(
+        &self,
+        this: &Value<'rt>,
+        args: &[Value<'rt>],
+    ) -> Result<Value<'rt>> {
+        let c_args: Vec<HermesValue> = args.iter().map(|a| raw_copy(&a.raw)).collect();
+        let this_raw = raw_copy(&this.raw);
+        let raw = unsafe {
+            hermes__Function__Call(
+                self.rt,
+                self.pv,
+                &this_raw,
+                c_args.as_ptr(),
+                c_args.len(),
+            )
+        };
+        check_error(self.rt)?;
+        Ok(unsafe { Value::from_raw(self.rt, raw) })
+    }
+
     pub fn is_host_function(&self) -> bool {
         unsafe { hermes__Function__IsHostFunction(self.rt, self.pv) }
     }

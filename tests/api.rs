@@ -1,4 +1,7 @@
-use rusty_hermes::{Array, Function, JsString, Object, Runtime, Value};
+use rusty_hermes::{
+    Array, ArrayBuffer, BigInt, Function, JsString, Object, PropNameId, Runtime, RuntimeConfig,
+    Scope, Value, WeakObject,
+};
 
 #[test]
 fn eval_number() {
@@ -248,4 +251,372 @@ fn js_string_operations() {
     assert!(s1.strict_equals(&s2));
     assert!(!s1.strict_equals(&s3));
     assert_eq!(s1.to_rust_string().unwrap(), "hello");
+}
+
+#[test]
+fn runtime_with_config_default() {
+    let config = RuntimeConfig::builder().build();
+    let rt = Runtime::with_config(config).unwrap();
+    let val = rt.eval("1 + 2").unwrap();
+    assert_eq!(val.as_number(), Some(3.0));
+}
+
+#[test]
+fn runtime_with_config_no_eval() {
+    let config = RuntimeConfig::builder().enable_eval(false).build();
+    let rt = Runtime::with_config(config).unwrap();
+    // Direct eval should still work (it's top-level evaluation, not JS eval())
+    let val = rt.eval("1 + 2").unwrap();
+    assert_eq!(val.as_number(), Some(3.0));
+    // But eval() inside JS should fail
+    let result = rt.eval("eval('1 + 2')");
+    assert!(result.is_err());
+}
+
+#[test]
+fn runtime_with_config_no_intl() {
+    let config = RuntimeConfig::builder().intl(false).build();
+    let rt = Runtime::with_config(config).unwrap();
+    let val = rt.eval("1 + 2").unwrap();
+    assert_eq!(val.as_number(), Some(3.0));
+}
+
+// ---------------------------------------------------------------------------
+// New API tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn value_to_js_string() {
+    let rt = Runtime::new().unwrap();
+    let val = rt.eval("42").unwrap();
+    let s = val.to_js_string().unwrap();
+    assert_eq!(s.to_rust_string().unwrap(), "42");
+
+    let val2 = rt.eval("true").unwrap();
+    let s2 = val2.to_js_string().unwrap();
+    assert_eq!(s2.to_rust_string().unwrap(), "true");
+}
+
+#[test]
+fn value_duplicate() {
+    let rt = Runtime::new().unwrap();
+    // Primitive
+    let v1 = rt.eval("42").unwrap();
+    let v2 = v1.duplicate();
+    assert_eq!(v2.as_number(), Some(42.0));
+
+    // String (pointer type)
+    let s1 = rt.eval("'hello'").unwrap();
+    let s2 = s1.duplicate();
+    assert!(s1.strict_equals(&s2));
+}
+
+#[test]
+fn value_from_js_clone_pointer() {
+    use rusty_hermes::FromJs;
+    let rt = Runtime::new().unwrap();
+    let s = rt.eval("'hello'").unwrap();
+    let cloned = Value::from_js(&rt, &s).unwrap();
+    assert!(s.strict_equals(&cloned));
+}
+
+#[test]
+fn bigint_operations() {
+    let rt = Runtime::new().unwrap();
+    let bi = BigInt::from_i64(&rt, -42);
+    assert!(bi.is_i64());
+    assert_eq!(bi.truncate_to_i64(), -42);
+
+    let s = bi.to_js_string(10);
+    assert_eq!(s.to_rust_string().unwrap(), "-42");
+
+    let bi2 = BigInt::from_u64(&rt, 100);
+    assert!(bi2.is_u64());
+    assert_eq!(bi2.truncate_to_u64(), 100);
+
+    let s2 = bi2.to_js_string(16);
+    assert_eq!(s2.to_rust_string().unwrap(), "64");
+}
+
+#[test]
+fn bigint_strict_equals() {
+    let rt = Runtime::new().unwrap();
+    let a = BigInt::from_i64(&rt, 42);
+    let b = BigInt::from_i64(&rt, 42);
+    let c = BigInt::from_i64(&rt, 99);
+    assert!(a.strict_equals(&b));
+    assert!(!a.strict_equals(&c));
+}
+
+#[test]
+fn function_call_with_this() {
+    let rt = Runtime::new().unwrap();
+    rt.eval("var obj = { x: 10 }").unwrap();
+    let func: Function = rt
+        .eval("(function() { return this.x; })")
+        .unwrap()
+        .into_function()
+        .unwrap();
+    let obj = rt.eval("obj").unwrap();
+    let result = func.call_with_this(&obj, &[]).unwrap();
+    assert_eq!(result.as_number(), Some(10.0));
+}
+
+#[test]
+fn object_external_memory_pressure() {
+    let rt = Runtime::new().unwrap();
+    let obj = Object::new(&rt);
+    // Just verify it doesn't crash
+    obj.set_external_memory_pressure(1024);
+}
+
+#[test]
+fn object_native_state() {
+    let rt = Runtime::new().unwrap();
+    let obj = Object::new(&rt);
+
+    assert!(!obj.has_native_state());
+
+    unsafe extern "C" fn noop(_data: *mut std::ffi::c_void) {}
+
+    let data = Box::into_raw(Box::new(42u64)) as *mut std::ffi::c_void;
+    unsafe { obj.set_native_state(data, noop) };
+
+    assert!(obj.has_native_state());
+    let ptr = obj.get_native_state();
+    assert!(!ptr.is_null());
+    let val = unsafe { *(ptr as *const u64) };
+    assert_eq!(val, 42);
+
+    // Clean up manually since our noop finalizer doesn't free
+    unsafe { drop(Box::from_raw(ptr as *mut u64)) };
+}
+
+#[test]
+fn object_is_host_object() {
+    let rt = Runtime::new().unwrap();
+    let obj = Object::new(&rt);
+    assert!(!obj.is_host_object());
+}
+
+#[test]
+fn propnameid_from_utf8() {
+    let rt = Runtime::new().unwrap();
+    let name = PropNameId::from_utf8(&rt, "hello");
+    assert_eq!(name.to_rust_string().unwrap(), "hello");
+}
+
+#[test]
+fn propnameid_equals() {
+    let rt = Runtime::new().unwrap();
+    let a = PropNameId::from_utf8(&rt, "foo");
+    let b = PropNameId::from_utf8(&rt, "foo");
+    let c = PropNameId::from_utf8(&rt, "bar");
+    assert!(a.equals(&b));
+    assert!(!a.equals(&c));
+}
+
+#[test]
+fn propnameid_from_string() {
+    let rt = Runtime::new().unwrap();
+    let s = JsString::new(&rt, "test");
+    let name = PropNameId::from_string(&rt, &s);
+    assert_eq!(name.to_rust_string().unwrap(), "test");
+}
+
+#[test]
+fn array_buffer_create() {
+    let rt = Runtime::new().unwrap();
+    let mut buf = ArrayBuffer::new(&rt, 16);
+    assert_eq!(buf.size(), 16);
+
+    let data = buf.data_mut();
+    data[0] = 0xAA;
+    data[1] = 0xBB;
+
+    let data_read = buf.data();
+    assert_eq!(data_read[0], 0xAA);
+    assert_eq!(data_read[1], 0xBB);
+}
+
+#[test]
+fn array_buffer_from_js() {
+    let rt = Runtime::new().unwrap();
+    let val = rt.eval("new ArrayBuffer(8)").unwrap();
+    assert!(val.is_object());
+    let buf: ArrayBuffer = val.into_array_buffer().unwrap();
+    assert_eq!(buf.size(), 8);
+}
+
+#[test]
+fn array_buffer_into_value() {
+    let rt = Runtime::new().unwrap();
+    let buf = ArrayBuffer::new(&rt, 4);
+    let val: Value = buf.into();
+    assert!(val.is_object());
+}
+
+#[test]
+fn weak_object_lock() {
+    let rt = Runtime::new().unwrap();
+    let obj = Object::new(&rt);
+    let weak = WeakObject::new(&rt, &obj);
+    // Object is still alive, so lock should succeed
+    let locked = weak.lock().unwrap();
+    assert!(locked.is_some());
+    assert!(locked.unwrap().is_object());
+}
+
+#[test]
+fn scope_create() {
+    let rt = Runtime::new().unwrap();
+    {
+        let _scope = Scope::new(&rt);
+        let _val = rt.eval("42").unwrap();
+    }
+    // After scope drops, eval still works
+    let val = rt.eval("1 + 1").unwrap();
+    assert_eq!(val.as_number(), Some(2.0));
+}
+
+#[test]
+fn prepared_javascript() {
+    let rt = Runtime::new().unwrap();
+    let prepared = rt.prepare_javascript("1 + 2", "test.js").unwrap();
+    let result = rt.evaluate_prepared_javascript(&prepared).unwrap();
+    assert_eq!(result.as_number(), Some(3.0));
+
+    // Evaluate again (reuse)
+    let result2 = rt.evaluate_prepared_javascript(&prepared).unwrap();
+    assert_eq!(result2.as_number(), Some(3.0));
+}
+
+#[test]
+fn create_value_from_json() {
+    let rt = Runtime::new().unwrap();
+    let val = rt.create_value_from_json(r#"{"a": 1, "b": "two"}"#).unwrap();
+    let obj = val.into_object().unwrap();
+    assert_eq!(obj.get("a").unwrap().as_number(), Some(1.0));
+    let b = obj.get("b").unwrap().into_string().unwrap();
+    assert_eq!(b.to_rust_string().unwrap(), "two");
+}
+
+#[test]
+fn runtime_description() {
+    let rt = Runtime::new().unwrap();
+    let desc = rt.description();
+    assert!(!desc.is_empty());
+}
+
+#[test]
+fn runtime_is_inspectable() {
+    let rt = Runtime::new().unwrap();
+    // Just verify it doesn't crash; result depends on build config
+    let _ = rt.is_inspectable();
+}
+
+#[test]
+fn bytecode_version() {
+    let version = Runtime::bytecode_version();
+    assert!(version > 0);
+}
+
+#[test]
+fn bytecode_checks() {
+    // Random bytes are not valid bytecode
+    let data = b"not bytecode";
+    assert!(!Runtime::is_hermes_bytecode(data));
+    assert!(!Runtime::bytecode_sanity_check(data));
+}
+
+#[test]
+fn watch_time_limit() {
+    let rt = Runtime::new().unwrap();
+    rt.watch_time_limit(5000);
+    let val = rt.eval("1 + 1").unwrap();
+    assert_eq!(val.as_number(), Some(2.0));
+    rt.unwatch_time_limit();
+}
+
+#[test]
+fn drain_microtasks() {
+    let config = RuntimeConfig::builder().microtask_queue(true).build();
+    let rt = Runtime::with_config(config).unwrap();
+    let drained = rt.drain_microtasks().unwrap();
+    assert!(drained); // nothing to drain
+}
+
+#[test]
+fn object_get_set_with_propname() {
+    let rt = Runtime::new().unwrap();
+    let obj = Object::new(&rt);
+    let key = PropNameId::from_utf8(&rt, "myProp");
+
+    obj.set_with_propname(&key, Value::from_number(99.0)).unwrap();
+    assert!(obj.has_with_propname(&key));
+
+    let val = obj.get_with_propname(&key).unwrap();
+    assert_eq!(val.as_number(), Some(99.0));
+}
+
+#[test]
+fn js_string_from_ascii() {
+    let rt = Runtime::new().unwrap();
+    let s = JsString::from_ascii(&rt, "hello ascii");
+    assert_eq!(s.to_rust_string().unwrap(), "hello ascii");
+}
+
+#[test]
+fn host_object_create() {
+    use rusty_hermes::{
+        HermesHostObjectFinalizer, HermesHostObjectGetCallback,
+        HermesHostObjectGetPropertyNamesCallback, HermesHostObjectSetCallback,
+    };
+
+    unsafe extern "C" fn get_cb(
+        _rt: *mut libhermesabi_sys::HermesRt,
+        _name: *const std::ffi::c_void,
+        _user_data: *mut std::ffi::c_void,
+    ) -> libhermesabi_sys::HermesValue {
+        libhermesabi_sys::HermesValue {
+            kind: libhermesabi_sys::HermesValueKind_Number,
+            data: libhermesabi_sys::HermesValueData { number: 42.0 },
+        }
+    }
+
+    unsafe extern "C" fn set_cb(
+        _rt: *mut libhermesabi_sys::HermesRt,
+        _name: *const std::ffi::c_void,
+        _value: *const libhermesabi_sys::HermesValue,
+        _user_data: *mut std::ffi::c_void,
+    ) {}
+
+    unsafe extern "C" fn get_names_cb(
+        _rt: *mut libhermesabi_sys::HermesRt,
+        out_count: *mut usize,
+        _user_data: *mut std::ffi::c_void,
+    ) -> *mut *mut std::ffi::c_void {
+        unsafe { *out_count = 0 };
+        std::ptr::null_mut()
+    }
+
+    unsafe extern "C" fn finalizer(_user_data: *mut std::ffi::c_void) {}
+
+    let rt = Runtime::new().unwrap();
+    let host_obj = unsafe {
+        Object::create_host_object(
+            &rt,
+            get_cb as HermesHostObjectGetCallback,
+            set_cb as HermesHostObjectSetCallback,
+            get_names_cb as HermesHostObjectGetPropertyNamesCallback,
+            std::ptr::null_mut(),
+            finalizer as HermesHostObjectFinalizer,
+        )
+    };
+
+    assert!(host_obj.is_host_object());
+
+    // Getting any property should return 42
+    let val = host_obj.get("anything").unwrap();
+    assert_eq!(val.as_number(), Some(42.0));
 }

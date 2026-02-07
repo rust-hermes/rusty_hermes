@@ -44,6 +44,26 @@ impl<'rt> BigInt<'rt> {
     pub fn truncate_to_u64(&self) -> u64 {
         unsafe { hermes__BigInt__Truncate(self.rt, self.pv) }
     }
+
+    /// Truncate to an `i64`. Use [`is_i64`](Self::is_i64) to check lossless-ness.
+    pub fn truncate_to_i64(&self) -> i64 {
+        unsafe { hermes__BigInt__Truncate(self.rt, self.pv) as i64 }
+    }
+
+    /// Convert to a JS string with the given radix (2-36).
+    pub fn to_js_string(&self, radix: i32) -> crate::JsString<'rt> {
+        let pv = unsafe { hermes__BigInt__ToString(self.rt, self.pv, radix) };
+        crate::JsString {
+            pv,
+            rt: self.rt,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Check strict equality with another BigInt.
+    pub fn strict_equals(&self, other: &BigInt<'rt>) -> bool {
+        unsafe { hermes__BigInt__StrictEquals(self.rt, self.pv, other.pv) }
+    }
 }
 
 impl Drop for BigInt<'_> {
