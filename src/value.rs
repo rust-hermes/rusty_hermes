@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use libhermesabi_sys::*;
 
 use crate::error::{Error, Result};
-use crate::{Array, BigInt, Function, JsString, Object, Symbol};
+use crate::{Array, ArrayBuffer, BigInt, Function, JsString, Object, Symbol};
 
 /// Kind tag for a [`Value`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -295,6 +295,54 @@ impl<'rt> Value<'rt> {
             rt,
             _marker: PhantomData,
         })
+    }
+
+    /// Convert to [`ArrayBuffer`], consuming `self`.
+    pub fn into_array_buffer(self) -> Result<ArrayBuffer<'rt>> {
+        if !self.is_object() {
+            return Err(Error::TypeError {
+                expected: "arraybuffer",
+                got: self.kind().name(),
+            });
+        }
+        let ptr = unsafe { self.raw.data.pointer };
+        let is_ab = unsafe { hermes__Object__IsArrayBuffer(self.rt, ptr) };
+        if !is_ab {
+            return Err(Error::TypeError {
+                expected: "arraybuffer",
+                got: "object",
+            });
+        }
+        let rt = self.rt;
+        std::mem::forget(self);
+        Ok(ArrayBuffer {
+            pv: ptr,
+            rt,
+            _marker: PhantomData,
+        })
+    }
+
+    // -- conversion to string --------------------------------------------------
+
+    /// Convert any value to a JS string (JS `String(value)` semantics).
+    pub fn to_js_string(&self) -> Result<JsString<'rt>> {
+        let pv = unsafe { hermes__Value__ToString(self.rt, &self.raw) };
+        crate::error::check_error(self.rt)?;
+        Ok(JsString {
+            pv,
+            rt: self.rt,
+            _marker: PhantomData,
+        })
+    }
+
+    /// Deep-clone this value. Creates a new `PointerValue` for pointer types.
+    pub fn duplicate(&self) -> Value<'rt> {
+        let raw = unsafe { hermes__Value__Clone(self.rt, &self.raw) };
+        Value {
+            raw,
+            rt: self.rt,
+            _marker: PhantomData,
+        }
     }
 
     // -- comparison ------------------------------------------------------------
