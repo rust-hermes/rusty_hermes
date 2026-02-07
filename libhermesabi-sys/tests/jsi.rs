@@ -1,106 +1,136 @@
 use libhermesabi_sys::*;
-use std::ffi::CString;
+use std::ptr;
 
-unsafe extern "C" fn release_wrapper(_buf: *mut HermesABIBuffer) {}
-
-unsafe extern "C" fn release_func_wrapper(_buf: *mut HermesABIHostFunction) {}
-
-unsafe extern "C" fn add_func(
-    _fn: *mut HermesABIHostFunction,
-    _rt: *mut HermesABIRuntime,
-    _this: *const HermesABIValue,
-    args: *const HermesABIValue,
-    _arg_count: usize,
-) -> HermesABIValueOrError {
+unsafe extern "C" fn add_callback(
+    _rt: *mut HermesRt,
+    _this_val: *const HermesValue,
+    args: *const HermesValue,
+    arg_count: usize,
+    _user_data: *mut std::ffi::c_void,
+) -> HermesValue {
+    assert!(arg_count >= 2);
     let a = &*args;
-    let b = &*(args.offset(1));
+    let b = &*args.add(1);
 
-    HermesABIValueOrError {
-        value: HermesABIValue {
-            kind: HermesABIValueKind_HermesABIValueKindNumber,
-            data: HermesABIValue__bindgen_ty_1 {
-                number: a.data.number + b.data.number,
-            },
+    assert_eq!(a.kind, HermesValueKind_Number);
+    assert_eq!(b.kind, HermesValueKind_Number);
+
+    HermesValue {
+        kind: HermesValueKind_Number,
+        data: HermesValueData {
+            number: a.data.number + b.data.number,
         },
     }
 }
 
+unsafe extern "C" fn noop_finalizer(_user_data: *mut std::ffi::c_void) {}
+
 #[test]
-fn init_runtime() {
+fn host_function_add() {
     unsafe {
-        let vtable_ptr = get_hermes_abi_vtable();
-        let vtable = &*vtable_ptr;
+        let rt = hermes__Runtime__New();
 
-        let config = std::ptr::null();
-        let runtime_ptr = (vtable.make_hermes_runtime.unwrap())(config);
+        // Create a PropNameID for "add".
+        let name_pni =
+            hermes__PropNameID__ForAscii(rt, b"add".as_ptr() as *const i8, 3);
+        assert!(!name_pni.is_null());
 
-        let runtime = &*runtime_ptr;
-        let runtime_vt = &*runtime.vt;
+        // Create a host function.
+        let func = hermes__Function__CreateFromHostFunction(
+            rt,
+            name_pni,
+            2, // param count
+            add_callback,
+            ptr::null_mut(),
+            noop_finalizer,
+        );
+        assert!(!func.is_null());
 
-        let script = String::from("add(1, 2)");
-        let script_url = CString::new("./src/test.js").expect("CString::new failed");
-
-        let vtable = HermesABIBufferVTable {
-            release: Some(release_wrapper),
+        // Set it on the global object.
+        let global = hermes__Runtime__Global(rt);
+        let func_val = HermesValue {
+            kind: HermesValueKind_Object,
+            data: HermesValueData { pointer: func },
         };
+        let ok = hermes__Object__SetProperty__PropNameID(
+            rt,
+            global,
+            name_pni,
+            &func_val,
+        );
+        assert!(ok);
 
-        let mut x = HermesABIBuffer {
-            vtable: &vtable,
-            data: script.as_ptr(),
-            size: script.len(),
-        };
-
-        let buffer_ptr = &mut x as *mut HermesABIBuffer;
-
-        let global_obj = runtime_vt.get_global_object.unwrap()(runtime_ptr);
-        let funcname_string =
-            runtime_vt.create_string_from_utf8.unwrap()(runtime_ptr, "add".as_ptr(), "add".len());
-
-        let funcname = runtime_vt.create_propnameid_from_string.unwrap()(
-            runtime_ptr,
-            HermesABIString {
-                pointer: funcname_string.ptr_or_error as *mut HermesABIManagedPointer,
-            },
+        // Evaluate "add(1, 2)".
+        let script = b"add(1, 2)";
+        let url = b"test.js";
+        let result = hermes__Runtime__EvaluateJavaScript(
+            rt,
+            script.as_ptr(),
+            script.len(),
+            url.as_ptr() as *const i8,
+            url.len(),
         );
 
-        let mut host_func = HermesABIHostFunction {
-            vtable: &HermesABIHostFunctionVTable {
-                call: Some(add_func),
-                release: Some(release_func_wrapper),
-            },
-        };
+        assert!(!hermes__Runtime__HasPendingError(rt));
+        assert_eq!(result.kind, HermesValueKind_Number);
+        assert_eq!(result.data.number, 3.0);
 
-        let add_func = runtime_vt.create_function_from_host_function.unwrap()(
-            runtime_ptr,
-            HermesABIPropNameID {
-                pointer: funcname.ptr_or_error as *mut HermesABIManagedPointer,
-            },
-            2,
-            &mut host_func,
+        // Clean up — the func pointer was borrowed by func_val and set on
+        // global, so global holds a reference. We release our handles.
+        hermes__PropNameID__Release(name_pni);
+        hermes__Object__Release(global);
+        // func was transferred into func_val which was set as a property.
+        // We still own the PV from CreateFromHostFunction, release it.
+        hermes__Function__Release(func);
+
+        hermes__Runtime__Delete(rt);
+    }
+}
+
+#[test]
+fn host_function_string_concat() {
+    unsafe {
+        let rt = hermes__Runtime__New();
+
+        // Evaluate a script that returns an array.
+        let script = b"[1, 'hello', true, null]";
+        let url = b"test.js";
+        let result = hermes__Runtime__EvaluateJavaScript(
+            rt,
+            script.as_ptr(),
+            script.len(),
+            url.as_ptr() as *const i8,
+            url.len(),
         );
 
-        runtime_vt.set_object_property_from_propnameid.unwrap()(
-            runtime_ptr,
-            global_obj,
-            HermesABIPropNameID {
-                pointer: funcname.ptr_or_error as *mut HermesABIManagedPointer,
-            },
-            &HermesABIValue {
-                kind: HermesABIValueKind_HermesABIValueKindObject,
-                data: HermesABIValue__bindgen_ty_1 {
-                    pointer: add_func.ptr_or_error as *mut HermesABIManagedPointer,
-                },
-            },
-        );
+        assert_eq!(result.kind, HermesValueKind_Object);
+        let obj = result.data.pointer;
 
-        let eval = runtime_vt.evaluate_javascript_source.unwrap();
-        let v = eval(
-            runtime_ptr,
-            buffer_ptr,
-            script_url.as_ptr(),
-            script_url.as_bytes().len(),
-        );
+        // Check it's an array.
+        assert!(hermes__Object__IsArray(rt, obj));
 
-        assert_eq!(v.value.data.number, 3.0);
+        // Get size.
+        let size = hermes__Array__Size(rt, obj);
+        assert_eq!(size, 4);
+
+        // Get elements.
+        let v0 = hermes__Array__GetValueAtIndex(rt, obj, 0);
+        assert_eq!(v0.kind, HermesValueKind_Number);
+        assert_eq!(v0.data.number, 1.0);
+
+        let v1 = hermes__Array__GetValueAtIndex(rt, obj, 1);
+        assert_eq!(v1.kind, HermesValueKind_String);
+
+        let v2 = hermes__Array__GetValueAtIndex(rt, obj, 2);
+        assert_eq!(v2.kind, HermesValueKind_Boolean);
+        assert!(v2.data.boolean);
+
+        let v3 = hermes__Array__GetValueAtIndex(rt, obj, 3);
+        assert_eq!(v3.kind, HermesValueKind_Null);
+
+        // Clean up.
+        hermes__Value__Release(&v1 as *const HermesValue as *mut HermesValue);
+        hermes__Object__Release(obj);
+        hermes__Runtime__Delete(rt);
     }
 }

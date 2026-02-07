@@ -1,43 +1,73 @@
-use bindgen::Builder;
 use cmake::Config;
 use std::env;
 use std::path::PathBuf;
 
 fn main() {
     let hermes_src_dir = "hermes";
+    let manifest_dir =
+        PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    let hermes_src = manifest_dir.join(hermes_src_dir);
 
-    // Tell cargo to invalidate the built crate whenever the wrapper changes
-    println!("cargo:rerun-if-changed=wrapper.h");
+    println!("cargo:rerun-if-changed=src/bindings/binding.cc");
+    println!("cargo:rerun-if-changed=src/bindings/binding.hpp");
     println!("cargo:rerun-if-changed={}/", hermes_src_dir);
 
-    // Set up the build
+    // Build Hermes via cmake, targeting libhermes (JSI implementation).
+    // On macOS this produces hermes.framework by default.
     let hermes_build = Config::new(hermes_src_dir)
-        .build_target("hermesabi")
+        .build_target("libhermes")
         .configure_arg("-G Ninja")
+        .define("HERMES_ENABLE_EH_RTTI", "ON")
         .build();
 
     let hermes_build_dir = format!("{}/build", hermes_build.display());
 
-    // Configure bindgen
-    let bindings = Builder::default()
-        .header("wrapper.h")
-        .clang_arg(format!("-I{}/API/hermes_abi", hermes_src_dir))
-        .allowlist_function(".*") // Avoids junk
-        .layout_tests(false)
-        // .rustified_enum(".*") // enums: HermesABIValueKind, HermesABIErrorCode
-        .generate()
-        .expect("Unable to generate bindings");
+    // Compile our C++ binding layer with the cc crate.
+    cc::Build::new()
+        .cpp(true)
+        .file("src/bindings/binding.cc")
+        .include(hermes_src.join("API"))
+        .include(hermes_src.join("API/jsi"))
+        .include(hermes_src.join("public"))
+        .include("src/bindings")
+        .flag("-std=c++17")
+        .flag("-fexceptions")
+        .flag("-frtti")
+        .compile("hermes_binding");
 
-    // Write the bindings to the $OUT_DIR/bindings.rs file.
-    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
-    bindings
-        .write_to_file(out_path.join("bindings.rs"))
-        .expect("Couldn't write bindings!");
+    // Link against the hermes framework (macOS) or shared library,
+    // plus the jsi static library for JSI symbols.
+    if cfg!(target_os = "macos") {
+        // On macOS, cmake builds hermes.framework in API/hermes/.
+        println!(
+            "cargo:rustc-link-search=framework={}/API/hermes",
+            hermes_build_dir
+        );
+        println!("cargo:rustc-link-lib=framework=hermes");
 
-    // Add link paths and libraries
-    println!(
-        "cargo:rustc-link-search=native={}/API/hermes_abi",
-        hermes_build_dir
-    );
-    println!("cargo:rustc-link-lib=dylib=hermesabi");
+        // Also link JSI shared lib (framework doesn't re-export all symbols).
+        println!(
+            "cargo:rustc-link-search=native={}/jsi",
+            hermes_build_dir
+        );
+        println!("cargo:rustc-link-lib=dylib=jsi");
+
+        // Set rpath so the framework/dylibs can be found at runtime.
+        println!(
+            "cargo:rustc-link-arg=-Wl,-rpath,{}/API/hermes",
+            hermes_build_dir
+        );
+        println!(
+            "cargo:rustc-link-arg=-Wl,-rpath,{}/jsi",
+            hermes_build_dir
+        );
+        println!("cargo:rustc-link-lib=c++");
+    } else {
+        println!(
+            "cargo:rustc-link-search=native={}/API/hermes",
+            hermes_build_dir
+        );
+        println!("cargo:rustc-link-lib=dylib=hermes");
+        println!("cargo:rustc-link-lib=stdc++");
+    }
 }
