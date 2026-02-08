@@ -10,7 +10,11 @@ categories = ["api-bindings"]
 keywords = ["javascript", "hermes", "v8", "jsc", "spidermonkey"]
 
 [workspace]
-members = ["libhermesabi-sys"]
+members = ["libhermesabi-sys", "rusty_hermes_macros"]
 
 [dependencies]
 libhermesabi-sys = { path = "libhermesabi-sys", version = "0.4.0" }
+rusty_hermes_macros = { path = "rusty_hermes_macros", version = "0.1.0" }
+
+[dev-dependencies]
+rusty_hermes_macros = { path = "rusty_hermes_macros", version = "0.1.0" }

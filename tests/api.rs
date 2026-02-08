@@ -1,6 +1,6 @@
 use rusty_hermes::{
-    Array, ArrayBuffer, BigInt, Function, JsString, Object, PropNameId, Runtime, RuntimeConfig,
-    Scope, Value, WeakObject,
+    hermes_op, Array, ArrayBuffer, BigInt, Function, JsString, Object, PropNameId, Runtime,
+    RuntimeConfig, Scope, Value, WeakObject,
 };
 
 #[test]
@@ -117,43 +117,49 @@ fn create_array() {
     assert_eq!(sum.as_number(), Some(6.0));
 }
 
+#[hermes_op]
+fn host_add(a: f64, b: f64) -> f64 { a + b }
+
 #[test]
 fn host_function_add() {
     let rt = Runtime::new().unwrap();
-    rt.set_func("add", |a: f64, b: f64| -> f64 { a + b }).unwrap();
-
-    let result = rt.eval("add(10, 20)").unwrap();
+    host_add::register(&rt).unwrap();
+    let result = rt.eval("host_add(10, 20)").unwrap();
     assert_eq!(result.as_number(), Some(30.0));
+}
+
+#[hermes_op(name = "greet")]
+fn host_greet(name: String) -> String {
+    format!("Hello, {name}!")
 }
 
 #[test]
 fn host_function_string() {
     let rt = Runtime::new().unwrap();
-    rt.set_func("greet", |name: String| -> String {
-        format!("Hello, {name}!")
-    })
-    .unwrap();
-
+    host_greet::register(&rt).unwrap();
     let result = rt.eval("greet('Rust')").unwrap();
     let s: JsString = result.into_string().unwrap();
     assert_eq!(s.to_rust_string().unwrap(), "Hello, Rust!");
 }
 
+#[hermes_op(name = "getFortyTwo")]
+fn get_forty_two() -> f64 { 42.0 }
+
 #[test]
 fn host_function_no_args() {
     let rt = Runtime::new().unwrap();
-    rt.set_func("getFortyTwo", || -> f64 { 42.0 }).unwrap();
-
+    get_forty_two::register(&rt).unwrap();
     let result = rt.eval("getFortyTwo()").unwrap();
     assert_eq!(result.as_number(), Some(42.0));
 }
 
+#[hermes_op]
+fn sum3(a: f64, b: f64, c: f64) -> f64 { a + b + c }
+
 #[test]
 fn host_function_three_args() {
     let rt = Runtime::new().unwrap();
-    rt.set_func("sum3", |a: f64, b: f64, c: f64| -> f64 { a + b + c })
-        .unwrap();
-
+    sum3::register(&rt).unwrap();
     let result = rt.eval("sum3(1, 2, 3)").unwrap();
     assert_eq!(result.as_number(), Some(6.0));
 }
@@ -225,8 +231,8 @@ fn value_constructors() {
     let b = Value::from_bool(true);
     assert_eq!(b.as_bool(), Some(true));
 
-    let num = Value::from_number(3.14);
-    assert_eq!(num.as_number(), Some(3.14));
+    let num = Value::from_number(3.125);
+    assert_eq!(num.as_number(), Some(3.125));
 }
 
 #[test]

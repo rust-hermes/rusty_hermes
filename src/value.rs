@@ -32,7 +32,7 @@ impl ValueKind {
         }
     }
 
-    pub(crate) fn name(self) -> &'static str {
+    pub fn name(self) -> &'static str {
         match self {
             ValueKind::Undefined => "undefined",
             ValueKind::Null => "null",
@@ -119,6 +119,32 @@ impl<'rt> Value<'rt> {
             raw,
             rt,
             _marker: PhantomData,
+        }
+    }
+
+    /// Clone a raw `HermesValue` and wrap it as an owned `Value`.
+    ///
+    /// For pointer types this calls `hermes__Value__Clone`; for primitives
+    /// the raw bits are simply copied.
+    ///
+    /// # Safety
+    /// `rt` must be a valid runtime pointer. `raw` must belong to that runtime.
+    pub unsafe fn from_raw_clone(rt: *mut HermesRt, raw: &HermesValue) -> Self {
+        match raw.kind {
+            HermesValueKind_String | HermesValueKind_Object | HermesValueKind_Symbol
+            | HermesValueKind_BigInt => {
+                let cloned = hermes__Value__Clone(rt, raw);
+                Value {
+                    raw: cloned,
+                    rt,
+                    _marker: PhantomData,
+                }
+            }
+            _ => Value {
+                raw: std::ptr::read(raw),
+                rt,
+                _marker: PhantomData,
+            },
         }
     }
 
@@ -336,13 +362,33 @@ impl<'rt> Value<'rt> {
     }
 
     /// Deep-clone this value. Creates a new `PointerValue` for pointer types.
+    /// Primitive types (undefined, null, boolean, number) are copied inline.
     pub fn duplicate(&self) -> Value<'rt> {
-        let raw = unsafe { hermes__Value__Clone(self.rt, &self.raw) };
-        Value {
-            raw,
-            rt: self.rt,
-            _marker: PhantomData,
+        match self.raw.kind {
+            HermesValueKind_String | HermesValueKind_Object | HermesValueKind_Symbol
+            | HermesValueKind_BigInt => {
+                let raw = unsafe { hermes__Value__Clone(self.rt, &self.raw) };
+                Value {
+                    raw,
+                    rt: self.rt,
+                    _marker: PhantomData,
+                }
+            }
+            // Primitives have no pointer — just copy the raw bits.
+            _ => Value {
+                raw: unsafe { std::ptr::read(&self.raw) },
+                rt: self.rt,
+                _marker: PhantomData,
+            },
         }
+    }
+
+    /// Consume this `Value` and return the underlying `HermesValue` without
+    /// running the destructor. The caller takes ownership of any pointer value.
+    pub fn into_raw(self) -> HermesValue {
+        let raw = unsafe { std::ptr::read(&self.raw) };
+        std::mem::forget(self);
+        raw
     }
 
     // -- comparison ------------------------------------------------------------

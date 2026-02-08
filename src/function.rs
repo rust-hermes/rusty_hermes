@@ -4,7 +4,6 @@ use libhermesabi_sys::*;
 
 use crate::error::{check_error, Error, Result};
 use crate::value::Value;
-use crate::Runtime;
 
 /// A JavaScript function handle.
 pub struct Function<'rt> {
@@ -131,36 +130,20 @@ impl std::fmt::Debug for Function<'_> {
 }
 
 // =============================================================================
-// Host function support
+// Trampoline support (used by #[hermes_op] generated code)
 // =============================================================================
 
-/// Trait for Rust closures that can be turned into JS host functions.
-///
-/// Implemented automatically for `Fn` closures whose arguments implement
-/// [`FromJsArg`] and whose return type implements [`IntoJsRet`].
-pub trait IntoJsFunc<Args> {
-    fn param_count(&self) -> u32;
-
-    /// Box the closure and return a raw trampoline + user_data + finalizer
-    /// suitable for `CreateFromHostFunction`.
-    fn into_parts(
-        self,
-    ) -> (
-        HermesHostFunctionCallback,
-        *mut std::ffi::c_void,
-        HermesHostFunctionFinalizer,
-    );
-}
-
-// -- Lightweight arg/ret conversion used only inside the trampoline ----------
-
 /// Extract a Rust value from a raw `HermesValue` arg during a host call.
+///
+/// Implemented for primitive types and by `#[derive(FromJs)]`.
 pub trait FromJsArg: Sized {
-    fn from_arg(rt: *mut HermesRt, raw: &HermesValue) -> Result<Self>;
+    /// # Safety
+    /// `rt` must be a valid, non-null pointer to an active Hermes runtime.
+    unsafe fn from_arg(rt: *mut HermesRt, raw: &HermesValue) -> Result<Self>;
 }
 
 impl FromJsArg for f64 {
-    fn from_arg(_rt: *mut HermesRt, raw: &HermesValue) -> Result<Self> {
+    unsafe fn from_arg(_rt: *mut HermesRt, raw: &HermesValue) -> Result<Self> {
         if raw.kind == HermesValueKind_Number {
             Ok(unsafe { raw.data.number })
         } else {
@@ -173,7 +156,7 @@ impl FromJsArg for f64 {
 }
 
 impl FromJsArg for bool {
-    fn from_arg(_rt: *mut HermesRt, raw: &HermesValue) -> Result<Self> {
+    unsafe fn from_arg(_rt: *mut HermesRt, raw: &HermesValue) -> Result<Self> {
         if raw.kind == HermesValueKind_Boolean {
             Ok(unsafe { raw.data.boolean })
         } else {
@@ -186,7 +169,7 @@ impl FromJsArg for bool {
 }
 
 impl FromJsArg for String {
-    fn from_arg(rt: *mut HermesRt, raw: &HermesValue) -> Result<Self> {
+    unsafe fn from_arg(rt: *mut HermesRt, raw: &HermesValue) -> Result<Self> {
         if raw.kind != HermesValueKind_String {
             return Err(Error::TypeError {
                 expected: "string",
@@ -208,18 +191,22 @@ impl FromJsArg for String {
 }
 
 impl FromJsArg for i32 {
-    fn from_arg(rt: *mut HermesRt, raw: &HermesValue) -> Result<Self> {
+    unsafe fn from_arg(rt: *mut HermesRt, raw: &HermesValue) -> Result<Self> {
         f64::from_arg(rt, raw).map(|n| n as i32)
     }
 }
 
 /// Convert a Rust return value into a raw `HermesValue`.
+///
+/// Implemented for primitive types and by `#[derive(IntoJs)]`.
 pub trait IntoJsRet {
-    fn into_ret(self, rt: *mut HermesRt) -> Result<HermesValue>;
+    /// # Safety
+    /// `rt` must be a valid, non-null pointer to an active Hermes runtime.
+    unsafe fn into_ret(self, rt: *mut HermesRt) -> Result<HermesValue>;
 }
 
 impl IntoJsRet for () {
-    fn into_ret(self, _rt: *mut HermesRt) -> Result<HermesValue> {
+    unsafe fn into_ret(self, _rt: *mut HermesRt) -> Result<HermesValue> {
         Ok(HermesValue {
             kind: HermesValueKind_Undefined,
             data: HermesValueData { number: 0.0 },
@@ -228,7 +215,7 @@ impl IntoJsRet for () {
 }
 
 impl IntoJsRet for f64 {
-    fn into_ret(self, _rt: *mut HermesRt) -> Result<HermesValue> {
+    unsafe fn into_ret(self, _rt: *mut HermesRt) -> Result<HermesValue> {
         Ok(HermesValue {
             kind: HermesValueKind_Number,
             data: HermesValueData { number: self },
@@ -237,7 +224,7 @@ impl IntoJsRet for f64 {
 }
 
 impl IntoJsRet for bool {
-    fn into_ret(self, _rt: *mut HermesRt) -> Result<HermesValue> {
+    unsafe fn into_ret(self, _rt: *mut HermesRt) -> Result<HermesValue> {
         Ok(HermesValue {
             kind: HermesValueKind_Boolean,
             data: HermesValueData { boolean: self },
@@ -246,7 +233,7 @@ impl IntoJsRet for bool {
 }
 
 impl IntoJsRet for String {
-    fn into_ret(self, rt: *mut HermesRt) -> Result<HermesValue> {
+    unsafe fn into_ret(self, rt: *mut HermesRt) -> Result<HermesValue> {
         let pv = unsafe {
             hermes__String__CreateFromUtf8(rt, self.as_ptr(), self.len())
         };
@@ -258,7 +245,7 @@ impl IntoJsRet for String {
 }
 
 impl IntoJsRet for i32 {
-    fn into_ret(self, _rt: *mut HermesRt) -> Result<HermesValue> {
+    unsafe fn into_ret(self, _rt: *mut HermesRt) -> Result<HermesValue> {
         Ok(HermesValue {
             kind: HermesValueKind_Number,
             data: HermesValueData {
@@ -269,180 +256,7 @@ impl IntoJsRet for i32 {
 }
 
 impl<T: IntoJsRet> IntoJsRet for Result<T> {
-    fn into_ret(self, rt: *mut HermesRt) -> Result<HermesValue> {
-        self.and_then(|v| v.into_ret(rt))
+    unsafe fn into_ret(self, rt: *mut HermesRt) -> Result<HermesValue> {
+        self.and_then(|v| unsafe { v.into_ret(rt) })
     }
-}
-
-// -- Macro to generate IntoJsFunc for N-ary tuples ---------------------------
-
-macro_rules! impl_into_js_func {
-    // Base case: 0 args
-    (@impl () ($($idx:tt)*)) => {
-        impl<F, R> IntoJsFunc<()> for F
-        where
-            F: Fn() -> R + 'static,
-            R: IntoJsRet,
-        {
-            fn param_count(&self) -> u32 { 0 }
-
-            fn into_parts(self) -> (HermesHostFunctionCallback, *mut std::ffi::c_void, HermesHostFunctionFinalizer) {
-                let boxed: Box<Box<dyn Fn() -> R>> = Box::new(Box::new(self));
-                let user_data = Box::into_raw(boxed) as *mut std::ffi::c_void;
-
-                unsafe extern "C" fn trampoline<F2, R2>(
-                    rt: *mut HermesRt,
-                    _this: *const HermesValue,
-                    _args: *const HermesValue,
-                    _argc: usize,
-                    user_data: *mut std::ffi::c_void,
-                ) -> HermesValue
-                where
-                    F2: Fn() -> R2,
-                    R2: IntoJsRet,
-                {
-                    let closure = &*(user_data as *const Box<dyn Fn() -> R2>);
-                    match closure().into_ret(rt) {
-                        Ok(v) => v,
-                        Err(_) => HermesValue {
-                            kind: HermesValueKind_Undefined,
-                            data: HermesValueData { number: 0.0 },
-                        },
-                    }
-                }
-
-                unsafe extern "C" fn drop_fn<F2, R2>(user_data: *mut std::ffi::c_void)
-                where
-                    F2: Fn() -> R2,
-                    R2: IntoJsRet,
-                {
-                    drop(Box::from_raw(user_data as *mut Box<dyn Fn() -> R2>));
-                }
-
-                (trampoline::<F, R>, user_data, drop_fn::<F, R>)
-            }
-        }
-    };
-    // Recursive case: N args
-    (@impl ($($A:ident),+) ($($idx:tt)+)) => {
-        #[allow(non_snake_case)]
-        impl<F, $($A,)+ R> IntoJsFunc<($($A,)+)> for F
-        where
-            F: Fn($($A),+) -> R + 'static,
-            $($A: FromJsArg + 'static,)+
-            R: IntoJsRet + 'static,
-        {
-            fn param_count(&self) -> u32 {
-                [$($idx,)+].len() as u32
-            }
-
-            fn into_parts(self) -> (HermesHostFunctionCallback, *mut std::ffi::c_void, HermesHostFunctionFinalizer) {
-                // Type-erase via trait object.
-                let boxed: Box<Box<dyn Fn($($A),+) -> R>> = Box::new(Box::new(self));
-                let user_data = Box::into_raw(boxed) as *mut std::ffi::c_void;
-
-                unsafe extern "C" fn trampoline<FF, $($A,)+ RR>(
-                    rt: *mut HermesRt,
-                    _this: *const HermesValue,
-                    args: *const HermesValue,
-                    _argc: usize,
-                    user_data: *mut std::ffi::c_void,
-                ) -> HermesValue
-                where
-                    FF: Fn($($A),+) -> RR,
-                    $($A: FromJsArg,)+
-                    RR: IntoJsRet,
-                {
-                    let closure = &*(user_data as *const Box<dyn Fn($($A),+) -> RR>);
-                    let _args_slice = std::slice::from_raw_parts(args, _argc);
-                    // Extract each argument.
-                    $(
-                        let $A = match $A::from_arg(rt, _args_slice.get($idx).unwrap_or(&HermesValue {
-                            kind: HermesValueKind_Undefined,
-                            data: HermesValueData { number: 0.0 },
-                        })) {
-                            Ok(v) => v,
-                            Err(_) => return HermesValue {
-                                kind: HermesValueKind_Undefined,
-                                data: HermesValueData { number: 0.0 },
-                            },
-                        };
-                    )+
-                    match closure($($A),+).into_ret(rt) {
-                        Ok(v) => v,
-                        Err(_) => HermesValue {
-                            kind: HermesValueKind_Undefined,
-                            data: HermesValueData { number: 0.0 },
-                        },
-                    }
-                }
-
-                unsafe extern "C" fn drop_fn<FF, $($A,)+ RR>(user_data: *mut std::ffi::c_void)
-                where
-                    FF: Fn($($A),+) -> RR,
-                    $($A: FromJsArg,)+
-                    RR: IntoJsRet,
-                {
-                    drop(Box::from_raw(user_data as *mut Box<dyn Fn($($A),+) -> RR>));
-                }
-
-                (trampoline::<F, $($A,)+ R>, user_data, drop_fn::<F, $($A,)+ R>)
-            }
-        }
-    };
-    // Entry: expand for 0..N args
-    () => {
-        impl_into_js_func!(@impl () ());
-    };
-    ($A:ident $idx:tt) => {
-        impl_into_js_func!(@impl ($A) ($idx));
-    };
-    ($A:ident $aidx:tt, $($B:ident $bidx:tt),+) => {
-        impl_into_js_func!(@impl ($A, $($B),+) ($aidx $($bidx)+));
-    };
-}
-
-// Generate implementations for 0..8 arguments.
-impl_into_js_func!();
-impl_into_js_func!(A 0);
-impl_into_js_func!(A 0, B 1);
-impl_into_js_func!(A 0, B 1, C 2);
-impl_into_js_func!(A 0, B 1, C 2, D 3);
-impl_into_js_func!(A 0, B 1, C 2, D 3, E 4);
-impl_into_js_func!(A 0, B 1, C 2, D 3, E 4, Fa 5);
-impl_into_js_func!(A 0, B 1, C 2, D 3, E 4, Fa 5, G 6);
-impl_into_js_func!(A 0, B 1, C 2, D 3, E 4, Fa 5, G 6, H 7);
-
-/// Create a host function from a Rust closure and register it on the runtime.
-///
-/// This is the internal plumbing used by [`Runtime::set_func`].
-pub(crate) fn create_host_function<'rt, Args, F: IntoJsFunc<Args>>(
-    rt: &'rt Runtime,
-    name: &str,
-    f: F,
-) -> Result<Function<'rt>> {
-    let param_count = f.param_count();
-    let (callback, user_data, finalizer) = f.into_parts();
-
-    let name_pv = unsafe {
-        hermes__PropNameID__ForUtf8(rt.raw, name.as_ptr(), name.len())
-    };
-    let func_pv = unsafe {
-        hermes__Function__CreateFromHostFunction(
-            rt.raw,
-            name_pv,
-            param_count,
-            callback,
-            user_data,
-            finalizer,
-        )
-    };
-    unsafe { hermes__PropNameID__Release(name_pv) };
-    check_error(rt.raw)?;
-
-    Ok(Function {
-        pv: func_pv,
-        rt: rt.raw,
-        _marker: PhantomData,
-    })
 }

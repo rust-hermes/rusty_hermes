@@ -10,16 +10,14 @@
 //! # Quick start
 //!
 //! ```rust,no_run
-//! use rusty_hermes::Runtime;
+//! use rusty_hermes::{Runtime, hermes_op};
+//!
+//! #[hermes_op]
+//! fn add(a: f64, b: f64) -> f64 { a + b }
 //!
 //! let rt = Runtime::new().unwrap();
+//! add::register(&rt).unwrap();
 //!
-//! // Evaluate JavaScript
-//! let val = rt.eval("1 + 2").unwrap();
-//! assert_eq!(val.as_number(), Some(3.0));
-//!
-//! // Register a host function
-//! rt.set_func("add", |a: f64, b: f64| -> f64 { a + b }).unwrap();
 //! let result = rt.eval("add(10, 20)").unwrap();
 //! assert_eq!(result.as_number(), Some(30.0));
 //! ```
@@ -29,7 +27,7 @@ mod array_buffer;
 mod bigint;
 mod convert;
 mod error;
-mod function;
+pub mod function;
 mod object;
 mod prepared_js;
 mod propnameid;
@@ -44,7 +42,8 @@ pub use array_buffer::ArrayBuffer;
 pub use bigint::BigInt;
 pub use convert::{FromJs, IntoJs};
 pub use error::{Error, Result};
-pub use function::{Function, IntoJsFunc};
+pub use function::Function;
+pub use rusty_hermes_macros::{FromJs, IntoJs, hermes_op};
 pub use object::Object;
 pub use prepared_js::PreparedJavaScript;
 pub use propnameid::PropNameId;
@@ -64,6 +63,50 @@ pub use libhermesabi_sys::{
 use std::marker::PhantomData;
 
 use libhermesabi_sys::*;
+
+// =============================================================================
+// Internals used by #[hermes_op] generated code — not part of public API.
+// =============================================================================
+
+#[doc(hidden)]
+pub mod __private {
+    pub use libhermesabi_sys::{
+        HermesHostFunctionCallback, HermesRt, HermesValue, HermesValueData,
+        HermesValueKind_Undefined,
+        hermes__Function__CreateFromHostFunction, hermes__Function__Release,
+        hermes__Object__Release, hermes__Object__SetProperty__String,
+        hermes__PropNameID__ForUtf8, hermes__PropNameID__Release,
+        hermes__Runtime__Global, hermes__Runtime__HasPendingError,
+        hermes__Runtime__SetPendingErrorMessage,
+        hermes__String__CreateFromUtf8, hermes__String__Release,
+    };
+
+    pub use crate::function::{FromJsArg, IntoJsRet};
+    pub use crate::error::Error;
+
+    /// Return an undefined `HermesValue` (used as default for missing args).
+    pub fn undefined_value() -> HermesValue {
+        HermesValue {
+            kind: HermesValueKind_Undefined,
+            data: HermesValueData { number: 0.0 },
+        }
+    }
+
+    /// Set a pending error message on the runtime and return an undefined
+    /// HermesValue. Used by generated trampolines to propagate Rust errors
+    /// as JS exceptions.
+    pub unsafe fn set_error_and_return_undefined(
+        rt: *mut HermesRt,
+        err: &Error,
+    ) -> HermesValue {
+        let msg = err.to_string();
+        hermes__Runtime__SetPendingErrorMessage(rt, msg.as_ptr(), msg.len());
+        undefined_value()
+    }
+
+    /// No-op finalizer for host functions that don't capture state.
+    pub unsafe extern "C" fn noop_finalizer(_: *mut std::ffi::c_void) {}
+}
 
 /// Configuration options for creating a Hermes runtime.
 ///
@@ -248,18 +291,49 @@ impl Runtime {
         }
     }
 
-    /// Register a host function as a global property.
+    /// Register a `#[hermes_op]` host function on the global object.
     ///
-    /// ```rust,no_run
-    /// # let rt = rusty_hermes::Runtime::new().unwrap();
-    /// rt.set_func("greet", |name: String| -> String {
-    ///     format!("Hello, {name}!")
-    /// }).unwrap();
-    /// ```
-    pub fn set_func<Args, F: IntoJsFunc<Args>>(&self, name: &str, f: F) -> Result<()> {
-        let func = function::create_host_function(self, name, f)?;
-        let global = self.global();
-        global.set(name, func.into())
+    /// This is called by generated `register()` methods — not intended for
+    /// direct use.
+    #[doc(hidden)]
+    pub fn __register_op(
+        &self,
+        name: &str,
+        param_count: u32,
+        callback: __private::HermesHostFunctionCallback,
+    ) -> Result<()> {
+        let name_pv = unsafe {
+            hermes__PropNameID__ForUtf8(self.raw, name.as_ptr(), name.len())
+        };
+        let func_pv = unsafe {
+            hermes__Function__CreateFromHostFunction(
+                self.raw,
+                name_pv,
+                param_count,
+                callback,
+                std::ptr::null_mut(),
+                __private::noop_finalizer,
+            )
+        };
+        unsafe { hermes__PropNameID__Release(name_pv) };
+        error::check_error(self.raw)?;
+
+        // Set on global object.
+        let global_pv = unsafe { hermes__Runtime__Global(self.raw) };
+        let key_pv = unsafe {
+            hermes__String__CreateFromUtf8(self.raw, name.as_ptr(), name.len())
+        };
+        let val = HermesValue {
+            kind: HermesValueKind_Object,
+            data: HermesValueData { pointer: func_pv },
+        };
+        unsafe {
+            hermes__Object__SetProperty__String(self.raw, global_pv, key_pv, &val);
+            hermes__String__Release(key_pv);
+            hermes__Object__Release(global_pv);
+            hermes__Function__Release(func_pv);
+        }
+        Ok(())
     }
 
     /// Drain the microtask queue. Returns `true` if fully drained.
@@ -411,6 +485,20 @@ impl Runtime {
     pub fn dump_sampled_trace_to_file(filename: &str) {
         let c_str = std::ffi::CString::new(filename).expect("invalid filename");
         unsafe { hermes__DumpSampledTraceToFile(c_str.as_ptr()) }
+    }
+
+    /// Create a temporary non-owning reference to the runtime from a raw pointer.
+    ///
+    /// The returned `Runtime` is wrapped in `ManuallyDrop` so `Drop` is never
+    /// called (avoiding a double-free of the underlying C++ object).
+    ///
+    /// # Safety
+    /// `ptr` must be a valid `HermesRt` pointer that outlives the returned value.
+    pub unsafe fn borrow_raw(ptr: *mut HermesRt) -> std::mem::ManuallyDrop<Runtime> {
+        std::mem::ManuallyDrop::new(Runtime {
+            raw: ptr,
+            _not_send_sync: PhantomData,
+        })
     }
 }
 

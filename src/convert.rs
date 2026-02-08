@@ -191,3 +191,31 @@ impl<'rt, T: FromJs<'rt>> FromJs<'rt> for Option<T> {
         }
     }
 }
+
+impl<'rt, T: FromJs<'rt>> FromJs<'rt> for Vec<T> {
+    fn from_js(rt: &'rt Runtime, value: &Value<'rt>) -> Result<Self> {
+        let arr = value.duplicate().into_array()?;
+        let len = arr.len();
+        let mut out = Vec::with_capacity(len);
+        for i in 0..len {
+            out.push(T::from_js(rt, &arr.get(i)?)?);
+        }
+        Ok(out)
+    }
+}
+
+impl<'rt, T: FromJs<'rt>> FromJs<'rt> for std::collections::HashMap<String, T> {
+    fn from_js(rt: &'rt Runtime, value: &Value<'rt>) -> Result<Self> {
+        let obj = value.duplicate().into_object()?;
+        let names = obj.property_names()?;
+        let len = names.len();
+        let mut map = std::collections::HashMap::with_capacity(len);
+        for i in 0..len {
+            let key_val = names.get(i)?;
+            let key = String::from_js(rt, &key_val)?;
+            let val = obj.get(&key)?;
+            map.insert(key, T::from_js(rt, &val)?);
+        }
+        Ok(map)
+    }
+}
