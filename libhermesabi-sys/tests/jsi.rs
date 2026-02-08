@@ -7,7 +7,7 @@ unsafe extern "C" fn add_callback(
     args: *const HermesValue,
     arg_count: usize,
     _user_data: *mut std::ffi::c_void,
-) -> HermesValue {
+) -> HermesValue { unsafe {
     assert!(arg_count >= 2);
     let a = &*args;
     let b = &*args.add(1);
@@ -21,7 +21,7 @@ unsafe extern "C" fn add_callback(
             number: a.data.number + b.data.number,
         },
     }
-}
+}}
 
 unsafe extern "C" fn noop_finalizer(_user_data: *mut std::ffi::c_void) {}
 
