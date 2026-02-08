@@ -73,6 +73,10 @@ fn main() {
         println!("cargo:rustc-link-lib=framework=CoreFoundation");
     } else {
         println!("cargo:rustc-link-lib=stdc++");
+        // Hermes's Unicode support (PlatformUnicodeICU) uses ICU on Linux.
+        println!("cargo:rustc-link-lib=icuuc");
+        println!("cargo:rustc-link-lib=icui18n");
+        println!("cargo:rustc-link-lib=icudata");
     }
 }
 
