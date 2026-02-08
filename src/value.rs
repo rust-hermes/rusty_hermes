@@ -129,7 +129,7 @@ impl<'rt> Value<'rt> {
     ///
     /// # Safety
     /// `rt` must be a valid runtime pointer. `raw` must belong to that runtime.
-    pub unsafe fn from_raw_clone(rt: *mut HermesRt, raw: &HermesValue) -> Self {
+    pub unsafe fn from_raw_clone(rt: *mut HermesRt, raw: &HermesValue) -> Self { unsafe {
         match raw.kind {
             HermesValueKind_String | HermesValueKind_Object | HermesValueKind_Symbol
             | HermesValueKind_BigInt => {
@@ -146,7 +146,7 @@ impl<'rt> Value<'rt> {
                 _marker: PhantomData,
             },
         }
-    }
+    }}
 
     // -- kind checks -----------------------------------------------------------
 

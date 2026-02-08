@@ -98,11 +98,11 @@ pub mod __private {
     pub unsafe fn set_error_and_return_undefined(
         rt: *mut HermesRt,
         err: &Error,
-    ) -> HermesValue {
+    ) -> HermesValue { unsafe {
         let msg = err.to_string();
         hermes__Runtime__SetPendingErrorMessage(rt, msg.as_ptr(), msg.len());
         undefined_value()
-    }
+    }}
 
     /// No-op finalizer for host functions that don't capture state.
     pub unsafe extern "C" fn noop_finalizer(_: *mut std::ffi::c_void) {}

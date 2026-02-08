@@ -114,7 +114,7 @@ impl<'rt> Object<'rt> {
         get_names_cb: HermesHostObjectGetPropertyNamesCallback,
         user_data: *mut std::ffi::c_void,
         finalizer: HermesHostObjectFinalizer,
-    ) -> Self {
+    ) -> Self { unsafe {
         let pv = hermes__Object__CreateFromHostObject(
             rt.raw,
             get_cb,
@@ -128,7 +128,7 @@ impl<'rt> Object<'rt> {
             rt: rt.raw,
             _marker: PhantomData,
         }
-    }
+    }}
 
     /// Get the opaque user_data pointer from a HostObject, or null if not a HostObject.
     pub fn get_host_object_data(&self) -> *mut std::ffi::c_void {
@@ -194,9 +194,9 @@ impl<'rt> Object<'rt> {
         &self,
         data: *mut std::ffi::c_void,
         finalizer: HermesNativeStateFinalizer,
-    ) {
+    ) { unsafe {
         hermes__Object__SetNativeState(self.rt, self.pv, data, finalizer);
-    }
+    }}
 
     /// Check if this object is a HostObject.
     pub fn is_host_object(&self) -> bool {

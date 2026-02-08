@@ -76,6 +76,7 @@ rt.eval("add_points({x: 1, y: 2}, {x: 3, y: 4})").unwrap();
 
 - **Evaluate JavaScript** — eval strings, prepared scripts, and JSON
 - **Type-safe values** — numbers, strings, booleans, objects, arrays, symbols, bigints, arraybuffers
+- **Rich type conversions** — `IntoJs`/`FromJs` for all numeric types, `String`, `bool`, `Option<T>`, `Vec<T>`, `HashMap<String, T>`, `BTreeMap<String, T>`, `HashSet<T>`, `BTreeSet<T>`
 - **Host functions** — register Rust closures as JS functions with automatic type conversion (up to 8 args)
 - **Host objects** — create JS objects backed by Rust callbacks for custom get/set/property enumeration
 - **Object manipulation** — get/set/has properties (string and PropNameId keys), property enumeration, instanceof, NativeState

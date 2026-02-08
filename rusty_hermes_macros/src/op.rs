@@ -52,11 +52,11 @@ pub fn expand(args: &OpArgs, func: &ItemFn) -> TokenStream {
     let mut param_names = Vec::new();
     let mut param_types = Vec::new();
     for input in &sig.inputs {
-        if let FnArg::Typed(pat_type) = input {
-            if let Pat::Ident(pat_ident) = &*pat_type.pat {
-                param_names.push(pat_ident.ident.clone());
-                param_types.push((*pat_type.ty).clone());
-            }
+        if let FnArg::Typed(pat_type) = input
+            && let Pat::Ident(pat_ident) = &*pat_type.pat
+        {
+            param_names.push(pat_ident.ident.clone());
+            param_types.push((*pat_type.ty).clone());
         }
     }
 
@@ -97,7 +97,7 @@ pub fn expand(args: &OpArgs, func: &ItemFn) -> TokenStream {
                     __args: *const rusty_hermes::__private::HermesValue,
                     __argc: usize,
                     __user_data: *mut ::std::ffi::c_void,
-                ) -> rusty_hermes::__private::HermesValue {
+                ) -> rusty_hermes::__private::HermesValue { unsafe {
                     let __args_slice: &[rusty_hermes::__private::HermesValue] = if __argc > 0 {
                         ::std::slice::from_raw_parts(__args, __argc)
                     } else {
@@ -112,7 +112,7 @@ pub fn expand(args: &OpArgs, func: &ItemFn) -> TokenStream {
                         Ok(v) => v,
                         Err(e) => rusty_hermes::__private::set_error_and_return_undefined(__rt, &e),
                     }
-                }
+                }}
                 rt.__register_op(#js_name, #param_count, __trampoline)
             }
         }
