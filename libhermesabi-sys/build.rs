@@ -1,4 +1,5 @@
 use cmake::Config;
+use std::collections::HashSet;
 use std::env;
 use std::path::PathBuf;
 
@@ -13,11 +14,14 @@ fn main() {
     println!("cargo:rerun-if-changed={}/", hermes_src_dir);
 
     // Build Hermes via cmake, targeting libhermes (JSI implementation).
-    // On macOS this produces hermes.framework by default.
+    // All libraries are built as static archives.
     let hermes_build = Config::new(hermes_src_dir)
         .build_target("libhermes")
         .configure_arg("-G Ninja")
         .define("HERMES_ENABLE_EH_RTTI", "ON")
+        .define("BUILD_SHARED_LIBS", "OFF")
+        .define("HERMES_BUILD_SHARED_JSI", "OFF")
+        .define("HERMES_BUILD_APPLE_FRAMEWORK", "OFF")
         .build();
 
     let hermes_build_dir = format!("{}/build", hermes_build.display());
@@ -38,39 +42,52 @@ fn main() {
         .flag("-frtti")
         .compile("hermes_binding");
 
-    // Link against the hermes framework (macOS) or shared library,
-    // plus the jsi static library for JSI symbols.
+    // Discover and link all static libraries produced by the Hermes build.
+    // Static archives don't embed transitive dependencies, so we need to link
+    // every .a file that CMake produced (the linker discards unused symbols).
+    let build_path = PathBuf::from(&hermes_build_dir);
+    let mut search_dirs = HashSet::new();
+
+    for entry in walkdir(&build_path) {
+        if let Some(ext) = entry.extension() {
+            if ext == "a" {
+                let dir = entry.parent().unwrap();
+                if search_dirs.insert(dir.to_path_buf()) {
+                    println!(
+                        "cargo:rustc-link-search=native={}",
+                        dir.display()
+                    );
+                }
+                // Strip the "lib" prefix and ".a" suffix to get the link name.
+                let stem = entry.file_stem().unwrap().to_str().unwrap();
+                let name = stem.strip_prefix("lib").unwrap_or(stem);
+                println!("cargo:rustc-link-lib=static={}", name);
+            }
+        }
+    }
+
+    // Link system libraries.
     if cfg!(target_os = "macos") {
-        // On macOS, cmake builds hermes.framework in API/hermes/.
-        println!(
-            "cargo:rustc-link-search=framework={}/API/hermes",
-            hermes_build_dir
-        );
-        println!("cargo:rustc-link-lib=framework=hermes");
-
-        // Also link JSI shared lib (framework doesn't re-export all symbols).
-        println!(
-            "cargo:rustc-link-search=native={}/jsi",
-            hermes_build_dir
-        );
-        println!("cargo:rustc-link-lib=dylib=jsi");
-
-        // Set rpath so the framework/dylibs can be found at runtime.
-        println!(
-            "cargo:rustc-link-arg=-Wl,-rpath,{}/API/hermes",
-            hermes_build_dir
-        );
-        println!(
-            "cargo:rustc-link-arg=-Wl,-rpath,{}/jsi",
-            hermes_build_dir
-        );
         println!("cargo:rustc-link-lib=c++");
+        // Hermes's Unicode support (PlatformUnicodeCF) uses CoreFoundation.
+        println!("cargo:rustc-link-lib=framework=CoreFoundation");
     } else {
-        println!(
-            "cargo:rustc-link-search=native={}/API/hermes",
-            hermes_build_dir
-        );
-        println!("cargo:rustc-link-lib=dylib=hermes");
         println!("cargo:rustc-link-lib=stdc++");
     }
+}
+
+/// Recursively walk a directory and yield all file paths.
+fn walkdir(dir: &std::path::Path) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                files.extend(walkdir(&path));
+            } else {
+                files.push(path);
+            }
+        }
+    }
+    files
 }
