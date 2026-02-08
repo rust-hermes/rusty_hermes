@@ -82,22 +82,11 @@ rt.eval("add_points({x: 1, y: 2}, {x: 3, y: 4})").unwrap();
 - **Rich type conversions** — `IntoJs`/`FromJs` for all numeric types, `String`, `bool`, `Option<T>`, `Vec<T>`, `HashMap<String, T>`, `BTreeMap<String, T>`, `HashSet<T>`, `BTreeSet<T>`
 - **Host functions** — register Rust closures as JS functions with automatic type conversion (up to 8 args)
 - **Host objects** — create JS objects backed by Rust callbacks for custom get/set/property enumeration
-- **Object manipulation** — get/set/has/delete properties (string, PropNameId, and Value keys), property enumeration, instanceof, NativeState, prototype get/set/create
-- **ArrayBuffer** — create, read, and write raw byte buffers
-- **PreparedJavaScript** — pre-compile scripts for repeated evaluation
-- **Scope** — RAII handle scopes for GC pressure management
-- **WeakObject** — weak references to JS objects
-- **Microtask queue** — queue microtasks and drain them
-- **RuntimeConfig** — builder pattern for configuring eval, Proxy, Intl, microtask queue, JIT, async generators, and more
-- **Execution limits** — watch/unwatch time limits for runaway scripts
-- **Bytecode utilities** — check, validate, prefetch Hermes bytecode, and read bytecode epilogue
-- **Sampling profiler** — enable/disable profiling, per-runtime registration, and dump traces
-- **Code coverage profiler** — enable/disable code coverage tracking
-- **Unique IDs** — Hermes-specific unique identifiers for objects, strings, symbols, bigints, and prop names
+- **Object manipulation** — get/set/has/delete properties, enumeration, instanceof, NativeState, prototypes
 - **Lifetime safety** — all JS values carry a `'rt` lifetime tied to their `Runtime`, preventing use-after-free at compile time
 - **Derive macros** — `#[derive(IntoJs, FromJs)]` for automatic Rust ↔ JS struct/enum conversion
 - **Ops system** — `#[hermes_op]` attribute macro for declaring host functions with auto type conversion and error propagation
-- **Error handling** — `Result` types for JS exceptions and type errors
+- **RuntimeConfig** — builder pattern for configuring eval, Proxy, Intl, microtask queue, JIT, async generators, and more
 
 ## Installation
 
