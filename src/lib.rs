@@ -27,7 +27,7 @@ mod array_buffer;
 mod bigint;
 mod convert;
 mod error;
-pub mod function;
+mod function;
 mod object;
 mod prepared_js;
 mod propnameid;

@@ -22,7 +22,7 @@ pub fn expand(input: &DeriveInput) -> TokenStream {
             }
         }
 
-        impl #impl_generics rusty_hermes::function::IntoJsRet for #name #ty_generics #where_clause {
+        impl #impl_generics rusty_hermes::__private::IntoJsRet for #name #ty_generics #where_clause {
             unsafe fn into_ret(self, rt: *mut libhermesabi_sys::HermesRt) -> rusty_hermes::Result<libhermesabi_sys::HermesValue> {
                 let rt_ref = unsafe { rusty_hermes::Runtime::borrow_raw(rt) };
                 let val = rusty_hermes::IntoJs::into_js(self, &rt_ref)?;

@@ -2,6 +2,8 @@ use std::fmt;
 
 use libhermesabi_sys::*;
 
+use crate::value::is_pointer_kind;
+
 unsafe extern "C" {
     fn free(ptr: *mut std::ffi::c_void);
 }
@@ -24,13 +26,7 @@ pub(crate) fn check_error(rt: *mut HermesRt) -> Result<()> {
         let mut err_val = hermes__Runtime__GetAndClearError(rt);
         let js_msg = extract_error_message(rt, &err_val);
         // Release pointer-typed error values.
-        if matches!(
-            err_val.kind,
-            HermesValueKind_String
-                | HermesValueKind_Object
-                | HermesValueKind_Symbol
-                | HermesValueKind_BigInt
-        ) {
+        if is_pointer_kind(err_val.kind) {
             hermes__Value__Release(&mut err_val);
         }
 
@@ -54,22 +50,11 @@ pub(crate) fn check_error(rt: *mut HermesRt) -> Result<()> {
 /// Handles: string values (direct), Error objects (.message property),
 /// and falls back to empty string for other types.
 unsafe fn extract_error_message(rt: *mut HermesRt, val: &HermesValue) -> String { unsafe {
-    fn read_string_pv(rt: *mut HermesRt, pv: *const std::ffi::c_void) -> String {
-        unsafe {
-            let needed = hermes__String__ToUtf8(rt, pv, std::ptr::null_mut(), 0);
-            if needed == 0 {
-                return String::new();
-            }
-            let mut buf = vec![0u8; needed];
-            hermes__String__ToUtf8(rt, pv, buf.as_mut_ptr() as *mut i8, buf.len());
-            String::from_utf8_lossy(&buf).into_owned()
-        }
-    }
+    use crate::string::pv_to_rust_string_lossy;
 
     match val.kind {
         HermesValueKind_String => {
-            let pv = val.data.pointer;
-            read_string_pv(rt, pv)
+            pv_to_rust_string_lossy(rt, val.data.pointer)
         }
         HermesValueKind_Object => {
             // Try to read the .message property from Error objects.
@@ -80,19 +65,13 @@ unsafe fn extract_error_message(rt: *mut HermesRt, val: &HermesValue) -> String 
                 hermes__Object__GetProperty__String(rt, val.data.pointer, key_pv);
             hermes__String__Release(key_pv);
             if msg_val.kind == HermesValueKind_String {
-                let s = read_string_pv(rt, msg_val.data.pointer);
+                let s = pv_to_rust_string_lossy(rt, msg_val.data.pointer);
                 let mut mv = msg_val;
                 hermes__Value__Release(&mut mv);
                 s
             } else {
                 // Release if it was a pointer type, then return empty.
-                if matches!(
-                    msg_val.kind,
-                    HermesValueKind_String
-                        | HermesValueKind_Object
-                        | HermesValueKind_Symbol
-                        | HermesValueKind_BigInt
-                ) {
+                if is_pointer_kind(msg_val.kind) {
                     let mut mv = msg_val;
                     hermes__Value__Release(&mut mv);
                 }

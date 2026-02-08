@@ -71,16 +71,15 @@ impl Drop for ArrayBuffer<'_> {
 
 impl<'rt> From<ArrayBuffer<'rt>> for Value<'rt> {
     fn from(buf: ArrayBuffer<'rt>) -> Value<'rt> {
-        let val = Value {
+        let buf = std::mem::ManuallyDrop::new(buf);
+        Value {
             raw: HermesValue {
                 kind: HermesValueKind_Object,
                 data: HermesValueData { pointer: buf.pv },
             },
             rt: buf.rt,
             _marker: PhantomData,
-        };
-        std::mem::forget(buf);
-        val
+        }
     }
 }
 

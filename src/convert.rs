@@ -132,17 +132,7 @@ impl<'rt> FromJs<'rt> for String {
             });
         }
         let pv = unsafe { value.raw.data.pointer };
-        let rt = value.rt;
-        let needed =
-            unsafe { hermes__String__ToUtf8(rt, pv, std::ptr::null_mut(), 0) };
-        if needed == 0 {
-            return Ok(String::new());
-        }
-        let mut buf = vec![0u8; needed];
-        unsafe {
-            hermes__String__ToUtf8(rt, pv, buf.as_mut_ptr() as *mut i8, buf.len());
-        }
-        String::from_utf8(buf).map_err(|e| Error::RuntimeError(e.to_string()))
+        crate::string::pv_to_rust_string(value.rt, pv)
     }
 }
 

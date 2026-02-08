@@ -37,16 +37,15 @@ impl Drop for Symbol<'_> {
 
 impl<'rt> From<Symbol<'rt>> for Value<'rt> {
     fn from(s: Symbol<'rt>) -> Value<'rt> {
-        let val = Value {
+        let s = std::mem::ManuallyDrop::new(s);
+        Value {
             raw: HermesValue {
                 kind: HermesValueKind_Symbol,
                 data: HermesValueData { pointer: s.pv },
             },
             rt: s.rt,
             _marker: PhantomData,
-        };
-        std::mem::forget(s);
-        val
+        }
     }
 }
 

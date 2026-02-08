@@ -74,16 +74,15 @@ impl Drop for BigInt<'_> {
 
 impl<'rt> From<BigInt<'rt>> for Value<'rt> {
     fn from(bi: BigInt<'rt>) -> Value<'rt> {
-        let val = Value {
+        let bi = std::mem::ManuallyDrop::new(bi);
+        Value {
             raw: HermesValue {
                 kind: HermesValueKind_BigInt,
                 data: HermesValueData { pointer: bi.pv },
             },
             rt: bi.rt,
             _marker: PhantomData,
-        };
-        std::mem::forget(bi);
-        val
+        }
     }
 }
 

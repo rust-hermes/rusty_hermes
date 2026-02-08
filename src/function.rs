@@ -15,7 +15,7 @@ pub struct Function<'rt> {
 impl<'rt> Function<'rt> {
     /// Call this function with `undefined` as `this`.
     pub fn call(&self, args: &[Value<'rt>]) -> Result<Value<'rt>> {
-        let c_args: Vec<HermesValue> = args.iter().map(|a| raw_copy(&a.raw)).collect();
+        let c_args: Vec<HermesValue> = args.iter().map(|a| a.raw).collect();
         let this = HermesValue {
             kind: HermesValueKind_Undefined,
             data: HermesValueData { number: 0.0 },
@@ -35,7 +35,7 @@ impl<'rt> Function<'rt> {
 
     /// Call as a constructor (`new Func(...args)`).
     pub fn call_as_constructor(&self, args: &[Value<'rt>]) -> Result<Value<'rt>> {
-        let c_args: Vec<HermesValue> = args.iter().map(|a| raw_copy(&a.raw)).collect();
+        let c_args: Vec<HermesValue> = args.iter().map(|a| a.raw).collect();
         let raw = unsafe {
             hermes__Function__CallAsConstructor(
                 self.rt,
@@ -54,13 +54,12 @@ impl<'rt> Function<'rt> {
         this: &Value<'rt>,
         args: &[Value<'rt>],
     ) -> Result<Value<'rt>> {
-        let c_args: Vec<HermesValue> = args.iter().map(|a| raw_copy(&a.raw)).collect();
-        let this_raw = raw_copy(&this.raw);
+        let c_args: Vec<HermesValue> = args.iter().map(|a| a.raw).collect();
         let raw = unsafe {
             hermes__Function__Call(
                 self.rt,
                 self.pv,
-                &this_raw,
+                &this.raw,
                 c_args.as_ptr(),
                 c_args.len(),
             )
@@ -74,25 +73,6 @@ impl<'rt> Function<'rt> {
     }
 }
 
-/// Make a shallow copy of a `HermesValue` for passing to FFI *without*
-/// transferring ownership.  The C layer's `c_to_jsi_value` clones pointer
-/// types, so the original remains valid.
-fn raw_copy(v: &HermesValue) -> HermesValue {
-    HermesValue {
-        kind: v.kind,
-        data: unsafe {
-            // Copy the union bits.
-            let mut d = HermesValueData { number: 0.0 };
-            std::ptr::copy_nonoverlapping(
-                v.data.number.to_ne_bytes().as_ptr(),
-                (&raw mut d) as *mut u8,
-                std::mem::size_of::<HermesValueData>(),
-            );
-            d
-        },
-    }
-}
-
 impl Drop for Function<'_> {
     fn drop(&mut self) {
         unsafe { hermes__Function__Release(self.pv) }
@@ -103,16 +83,15 @@ impl Drop for Function<'_> {
 
 impl<'rt> From<Function<'rt>> for Value<'rt> {
     fn from(f: Function<'rt>) -> Value<'rt> {
-        let val = Value {
+        let f = std::mem::ManuallyDrop::new(f);
+        Value {
             raw: HermesValue {
                 kind: HermesValueKind_Object,
                 data: HermesValueData { pointer: f.pv },
             },
             rt: f.rt,
             _marker: PhantomData,
-        };
-        std::mem::forget(f);
-        val
+        }
     }
 }
 
@@ -177,16 +156,7 @@ impl FromJsArg for String {
             });
         }
         let pv = unsafe { raw.data.pointer };
-        let needed =
-            unsafe { hermes__String__ToUtf8(rt, pv, std::ptr::null_mut(), 0) };
-        if needed == 0 {
-            return Ok(String::new());
-        }
-        let mut buf = vec![0u8; needed];
-        unsafe {
-            hermes__String__ToUtf8(rt, pv, buf.as_mut_ptr() as *mut i8, buf.len());
-        }
-        String::from_utf8(buf).map_err(|e| Error::RuntimeError(e.to_string()))
+        crate::string::pv_to_rust_string(rt, pv)
     }
 }
 

@@ -214,16 +214,15 @@ impl Drop for Object<'_> {
 
 impl<'rt> From<Object<'rt>> for Value<'rt> {
     fn from(obj: Object<'rt>) -> Value<'rt> {
-        let val = Value {
+        let obj = std::mem::ManuallyDrop::new(obj);
+        Value {
             raw: HermesValue {
                 kind: HermesValueKind_Object,
                 data: HermesValueData { pointer: obj.pv },
             },
             rt: obj.rt,
             _marker: PhantomData,
-        };
-        std::mem::forget(obj);
-        val
+        }
     }
 }
 
