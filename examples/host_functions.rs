@@ -12,7 +12,7 @@
 //!   cargo run --example host_functions
 //!   cargo run --example host_functions -- examples/demo.js
 
-use rusty_hermes::{hermes_op, Runtime};
+use rusty_hermes::{Runtime, hermes_op};
 use std::env;
 use std::fs;
 use std::process;

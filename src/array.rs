@@ -1,10 +1,10 @@
 use std::marker::PhantomData;
 
-use libhermesabi_sys::*;
+use libhermes_sys::*;
 
-use crate::error::{check_error, Error, Result};
-use crate::value::Value;
 use crate::Runtime;
+use crate::error::{Error, Result, check_error};
+use crate::value::Value;
 
 /// A JavaScript array handle.
 pub struct Array<'rt> {
@@ -42,9 +42,7 @@ impl<'rt> Array<'rt> {
 
     /// Set the value at `index`.
     pub fn set(&self, index: usize, val: Value<'rt>) -> Result<()> {
-        let ok = unsafe {
-            hermes__Array__SetValueAtIndex(self.rt, self.pv, index, &val.raw)
-        };
+        let ok = unsafe { hermes__Array__SetValueAtIndex(self.rt, self.pv, index, &val.raw) };
         if !ok {
             return check_error(self.rt).map(|_| ());
         }

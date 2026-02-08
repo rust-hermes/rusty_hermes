@@ -1,8 +1,8 @@
 use std::marker::PhantomData;
 
-use libhermesabi_sys::*;
+use libhermes_sys::*;
 
-use crate::error::{check_error, Result};
+use crate::error::{Result, check_error};
 use crate::value::Value;
 use crate::{Object, Runtime};
 

@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use libhermesabi_sys::*;
+use libhermes_sys::*;
 
 use crate::error::Result;
 use crate::{JsString, Runtime, Symbol};
@@ -17,9 +17,7 @@ pub struct PropNameId<'rt> {
 impl<'rt> PropNameId<'rt> {
     /// Create a property name from a UTF-8 string.
     pub fn from_utf8(rt: &'rt Runtime, s: &str) -> Self {
-        let pv = unsafe {
-            hermes__PropNameID__ForUtf8(rt.raw, s.as_ptr(), s.len())
-        };
+        let pv = unsafe { hermes__PropNameID__ForUtf8(rt.raw, s.as_ptr(), s.len()) };
         PropNameId {
             pv,
             rt: rt.raw,
@@ -29,9 +27,7 @@ impl<'rt> PropNameId<'rt> {
 
     /// Create a property name from an ASCII string.
     pub fn from_ascii(rt: &'rt Runtime, s: &str) -> Self {
-        let pv = unsafe {
-            hermes__PropNameID__ForAscii(rt.raw, s.as_ptr() as *const i8, s.len())
-        };
+        let pv = unsafe { hermes__PropNameID__ForAscii(rt.raw, s.as_ptr() as *const i8, s.len()) };
         PropNameId {
             pv,
             rt: rt.raw,
@@ -61,23 +57,16 @@ impl<'rt> PropNameId<'rt> {
 
     /// Get the UTF-8 string representation.
     pub fn to_rust_string(&self) -> Result<String> {
-        let needed = unsafe {
-            hermes__PropNameID__ToUtf8(self.rt, self.pv, std::ptr::null_mut(), 0)
-        };
+        let needed =
+            unsafe { hermes__PropNameID__ToUtf8(self.rt, self.pv, std::ptr::null_mut(), 0) };
         if needed == 0 {
             return Ok(String::new());
         }
         let mut buf = vec![0u8; needed];
         unsafe {
-            hermes__PropNameID__ToUtf8(
-                self.rt,
-                self.pv,
-                buf.as_mut_ptr() as *mut i8,
-                buf.len(),
-            );
+            hermes__PropNameID__ToUtf8(self.rt, self.pv, buf.as_mut_ptr() as *mut i8, buf.len());
         }
-        String::from_utf8(buf)
-            .map_err(|e| crate::error::Error::RuntimeError(e.to_string()))
+        String::from_utf8(buf).map_err(|e| crate::error::Error::RuntimeError(e.to_string()))
     }
 
     /// Check if two property names are equal.

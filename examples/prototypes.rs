@@ -12,11 +12,12 @@ fn main() {
     // Create a prototype object with a method
     let animal = Object::new(&rt);
     animal
-        .set("type", Value::from(rusty_hermes::JsString::new(&rt, "animal")))
+        .set(
+            "type",
+            Value::from(rusty_hermes::JsString::new(&rt, "animal")),
+        )
         .unwrap();
-    animal
-        .set("legs", Value::from_number(4.0))
-        .unwrap();
+    animal.set("legs", Value::from_number(4.0)).unwrap();
 
     println!("Prototype: type={}", {
         let t = animal.get("type").unwrap().into_string().unwrap();
@@ -50,13 +51,19 @@ fn main() {
     // Change prototype dynamically
     let new_proto = Object::new(&rt);
     new_proto
-        .set("sound", Value::from(rusty_hermes::JsString::new(&rt, "meow")))
+        .set(
+            "sound",
+            Value::from(rusty_hermes::JsString::new(&rt, "meow")),
+        )
         .unwrap();
     let new_proto_val: Value = new_proto.into();
     dog.set_prototype(&new_proto_val).unwrap();
 
     let sound = dog.get("sound").unwrap().into_string().unwrap();
-    println!("After set_prototype, sound = {}", sound.to_rust_string().unwrap());
+    println!(
+        "After set_prototype, sound = {}",
+        sound.to_rust_string().unwrap()
+    );
 
     // Old inherited property is gone
     let old_type = dog.get("type").unwrap();

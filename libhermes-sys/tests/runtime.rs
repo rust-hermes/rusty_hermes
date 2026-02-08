@@ -1,4 +1,4 @@
-use libhermesabi_sys::*;
+use libhermes_sys::*;
 
 #[test]
 fn eval_simple_expression() {
@@ -48,7 +48,12 @@ fn eval_string_result() {
         assert_eq!(needed, 11); // "hello world"
 
         let mut buf = vec![0u8; needed + 1];
-        hermes__String__ToUtf8(rt, result.data.pointer, buf.as_mut_ptr() as *mut i8, buf.len());
+        hermes__String__ToUtf8(
+            rt,
+            result.data.pointer,
+            buf.as_mut_ptr() as *mut i8,
+            buf.len(),
+        );
         let s = std::str::from_utf8(&buf[..needed]).unwrap();
         assert_eq!(s, "hello world");
 

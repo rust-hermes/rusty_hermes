@@ -30,7 +30,10 @@ fn main() {
     // -- PropNameId-based property access ------------------------------------
     let key = PropNameId::from_utf8(&rt, "version");
     let version = obj.get_with_propname(&key).unwrap();
-    println!("version (via PropNameId) = {}", version.as_number().unwrap());
+    println!(
+        "version (via PropNameId) = {}",
+        version.as_number().unwrap()
+    );
 
     // -- Delete property -----------------------------------------------------
     obj.set("temp", Value::from_number(99.0)).unwrap();
@@ -40,9 +43,7 @@ fn main() {
     println!("Delete property: OK");
 
     // -- Computed property access (Value key) ---------------------------------
-    let arr_val = rt
-        .create_value_from_json("[10, 20, 30]")
-        .unwrap();
+    let arr_val = rt.create_value_from_json("[10, 20, 30]").unwrap();
     let arr_obj = arr_val.into_object().unwrap();
     let idx = Value::from_number(1.0);
     let elem = arr_obj.get_with_value(&idx).unwrap();
@@ -132,7 +133,10 @@ fn main() {
     // -- Value to string -----------------------------------------------------
     let num = rt.eval("3.14").unwrap();
     let s = num.to_js_string().unwrap();
-    println!("Value::to_js_string(3.14) = {}", s.to_rust_string().unwrap());
+    println!(
+        "Value::to_js_string(3.14) = {}",
+        s.to_rust_string().unwrap()
+    );
 
     // -- Time limit ----------------------------------------------------------
     rt.watch_time_limit(5000); // 5 second limit

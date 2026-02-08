@@ -1,4 +1,4 @@
-use rusty_hermes::{hermes_op, FromJs, IntoJs, Runtime};
+use rusty_hermes::{FromJs, IntoJs, Runtime, hermes_op};
 
 // -- Basic hermes_op ---------------------------------------------------------
 

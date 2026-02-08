@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use libhermesabi_sys::*;
+use libhermes_sys::*;
 
 use crate::error::{Error, Result};
 use crate::{Array, ArrayBuffer, BigInt, Function, JsString, Object, Symbol};
@@ -141,22 +141,24 @@ impl<'rt> Value<'rt> {
     ///
     /// # Safety
     /// `rt` must be a valid runtime pointer. `raw` must belong to that runtime.
-    pub unsafe fn from_raw_clone(rt: *mut HermesRt, raw: &HermesValue) -> Self { unsafe {
-        if is_pointer_kind(raw.kind) {
-            let cloned = hermes__Value__Clone(rt, raw);
-            Value {
-                raw: cloned,
-                rt,
-                _marker: PhantomData,
-            }
-        } else {
-            Value {
-                raw: *raw,
-                rt,
-                _marker: PhantomData,
+    pub unsafe fn from_raw_clone(rt: *mut HermesRt, raw: &HermesValue) -> Self {
+        unsafe {
+            if is_pointer_kind(raw.kind) {
+                let cloned = hermes__Value__Clone(rt, raw);
+                Value {
+                    raw: cloned,
+                    rt,
+                    _marker: PhantomData,
+                }
+            } else {
+                Value {
+                    raw: *raw,
+                    rt,
+                    _marker: PhantomData,
+                }
             }
         }
-    }}
+    }
 
     // -- kind checks -----------------------------------------------------------
 

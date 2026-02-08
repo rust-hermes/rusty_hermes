@@ -2,7 +2,7 @@
 
 //! High-level, safe Rust bindings for the Hermes JavaScript engine.
 //!
-//! Built on top of [`libhermesabi_sys`] (flat C FFI), this crate provides
+//! Built on top of [`libhermes_sys`] (flat C FFI), this crate provides
 //! ergonomic Rust types with lifetime-based safety: all JS values carry a
 //! `'rt` lifetime tied to their [`Runtime`], preventing use-after-free at
 //! compile time.
@@ -43,27 +43,27 @@ pub use bigint::BigInt;
 pub use convert::{FromJs, IntoJs};
 pub use error::{Error, Result};
 pub use function::Function;
-pub use rusty_hermes_macros::{FromJs, IntoJs, hermes_op};
 pub use object::Object;
 pub use prepared_js::PreparedJavaScript;
 pub use propnameid::PropNameId;
+pub use rusty_hermes_macros::{FromJs, IntoJs, hermes_op};
 pub use scope::Scope;
 pub use string::JsString;
 pub use symbol::Symbol;
 pub use value::{Value, ValueKind};
 pub use weak_object::WeakObject;
-// Re-exported so users don't need libhermesabi_sys directly.
-pub use libhermesabi_sys::HermesRuntimeConfig;
-pub use libhermesabi_sys::HermesFatalHandler;
-pub use libhermesabi_sys::HermesNativeStateFinalizer;
-pub use libhermesabi_sys::{
+// Re-exported so users don't need libhermes_sys directly.
+pub use libhermes_sys::HermesFatalHandler;
+pub use libhermes_sys::HermesNativeStateFinalizer;
+pub use libhermes_sys::HermesRuntimeConfig;
+pub use libhermes_sys::{
     HermesHostObjectFinalizer, HermesHostObjectGetCallback,
     HermesHostObjectGetPropertyNamesCallback, HermesHostObjectSetCallback,
 };
 
 use std::marker::PhantomData;
 
-use libhermesabi_sys::*;
+use libhermes_sys::*;
 
 // =============================================================================
 // Internals used by #[hermes_op] generated code — not part of public API.
@@ -71,19 +71,17 @@ use libhermesabi_sys::*;
 
 #[doc(hidden)]
 pub mod __private {
-    pub use libhermesabi_sys::{
+    pub use libhermes_sys::{
         HermesHostFunctionCallback, HermesRt, HermesValue, HermesValueData,
-        HermesValueKind_Undefined,
-        hermes__Function__CreateFromHostFunction, hermes__Function__Release,
-        hermes__Object__Release, hermes__Object__SetProperty__String,
-        hermes__PropNameID__ForUtf8, hermes__PropNameID__Release,
-        hermes__Runtime__Global, hermes__Runtime__HasPendingError,
-        hermes__Runtime__SetPendingErrorMessage,
+        HermesValueKind_Undefined, hermes__Function__CreateFromHostFunction,
+        hermes__Function__Release, hermes__Object__Release, hermes__Object__SetProperty__String,
+        hermes__PropNameID__ForUtf8, hermes__PropNameID__Release, hermes__Runtime__Global,
+        hermes__Runtime__HasPendingError, hermes__Runtime__SetPendingErrorMessage,
         hermes__String__CreateFromUtf8, hermes__String__Release,
     };
 
-    pub use crate::function::{FromJsArg, IntoJsRet};
     pub use crate::error::Error;
+    pub use crate::function::{FromJsArg, IntoJsRet};
 
     /// Return an undefined `HermesValue` (used as default for missing args).
     pub fn undefined_value() -> HermesValue {
@@ -96,14 +94,13 @@ pub mod __private {
     /// Set a pending error message on the runtime and return an undefined
     /// HermesValue. Used by generated trampolines to propagate Rust errors
     /// as JS exceptions.
-    pub unsafe fn set_error_and_return_undefined(
-        rt: *mut HermesRt,
-        err: &Error,
-    ) -> HermesValue { unsafe {
-        let msg = err.to_string();
-        hermes__Runtime__SetPendingErrorMessage(rt, msg.as_ptr(), msg.len());
-        undefined_value()
-    }}
+    pub unsafe fn set_error_and_return_undefined(rt: *mut HermesRt, err: &Error) -> HermesValue {
+        unsafe {
+            let msg = err.to_string();
+            hermes__Runtime__SetPendingErrorMessage(rt, msg.as_ptr(), msg.len());
+            undefined_value()
+        }
+    }
 
     /// No-op finalizer for host functions that don't capture state.
     pub unsafe extern "C" fn noop_finalizer(_: *mut std::ffi::c_void) {}
@@ -277,7 +274,9 @@ impl Runtime {
     pub fn new() -> Result<Self> {
         let raw = unsafe { hermes__Runtime__New() };
         if raw.is_null() {
-            return Err(Error::RuntimeError("failed to create Hermes runtime".into()));
+            return Err(Error::RuntimeError(
+                "failed to create Hermes runtime".into(),
+            ));
         }
         Ok(Runtime {
             raw,
@@ -289,7 +288,9 @@ impl Runtime {
     pub fn with_config(config: RuntimeConfig) -> Result<Self> {
         let raw = unsafe { hermes__Runtime__NewWithConfig(&config.raw) };
         if raw.is_null() {
-            return Err(Error::RuntimeError("failed to create Hermes runtime".into()));
+            return Err(Error::RuntimeError(
+                "failed to create Hermes runtime".into(),
+            ));
         }
         Ok(Runtime {
             raw,
@@ -338,9 +339,7 @@ impl Runtime {
         param_count: u32,
         callback: __private::HermesHostFunctionCallback,
     ) -> Result<()> {
-        let name_pv = unsafe {
-            hermes__PropNameID__ForUtf8(self.raw, name.as_ptr(), name.len())
-        };
+        let name_pv = unsafe { hermes__PropNameID__ForUtf8(self.raw, name.as_ptr(), name.len()) };
         let func_pv = unsafe {
             hermes__Function__CreateFromHostFunction(
                 self.raw,
@@ -356,9 +355,7 @@ impl Runtime {
 
         // Set on global object.
         let global_pv = unsafe { hermes__Runtime__Global(self.raw) };
-        let key_pv = unsafe {
-            hermes__String__CreateFromUtf8(self.raw, name.as_ptr(), name.len())
-        };
+        let key_pv = unsafe { hermes__String__CreateFromUtf8(self.raw, name.as_ptr(), name.len()) };
         let val = HermesValue {
             kind: HermesValueKind_Object,
             data: HermesValueData { pointer: func_pv },
@@ -384,11 +381,7 @@ impl Runtime {
     /// Parse a JSON string into a JS value.
     pub fn create_value_from_json(&self, json: &str) -> Result<Value<'_>> {
         let raw = unsafe {
-            hermes__Runtime__CreateValueFromJsonUtf8(
-                self.raw,
-                json.as_ptr(),
-                json.len(),
-            )
+            hermes__Runtime__CreateValueFromJsonUtf8(self.raw, json.as_ptr(), json.len())
         };
         error::check_error(self.raw)?;
         Ok(unsafe { Value::from_raw(self.raw, raw) })
@@ -417,11 +410,7 @@ impl Runtime {
     }
 
     /// Pre-compile JavaScript for later evaluation.
-    pub fn prepare_javascript(
-        &self,
-        code: &str,
-        url: &str,
-    ) -> Result<PreparedJavaScript> {
+    pub fn prepare_javascript(&self, code: &str, url: &str) -> Result<PreparedJavaScript> {
         let raw = unsafe {
             hermes__Runtime__PrepareJavaScript(
                 self.raw,
@@ -433,21 +422,14 @@ impl Runtime {
         };
         error::check_error(self.raw)?;
         if raw.is_null() {
-            return Err(Error::RuntimeError(
-                "failed to prepare JavaScript".into(),
-            ));
+            return Err(Error::RuntimeError("failed to prepare JavaScript".into()));
         }
         Ok(PreparedJavaScript { raw })
     }
 
     /// Evaluate a previously prepared script.
-    pub fn evaluate_prepared_javascript(
-        &self,
-        prepared: &PreparedJavaScript,
-    ) -> Result<Value<'_>> {
-        let raw = unsafe {
-            hermes__Runtime__EvaluatePreparedJavaScript(self.raw, prepared.raw)
-        };
+    pub fn evaluate_prepared_javascript(&self, prepared: &PreparedJavaScript) -> Result<Value<'_>> {
+        let raw = unsafe { hermes__Runtime__EvaluatePreparedJavaScript(self.raw, prepared.raw) };
         error::check_error(self.raw)?;
         Ok(unsafe { Value::from_raw(self.raw, raw) })
     }
@@ -456,11 +438,7 @@ impl Runtime {
     pub fn description(&self) -> String {
         let mut buf = vec![0u8; 256];
         let len = unsafe {
-            hermes__Runtime__Description(
-                self.raw,
-                buf.as_mut_ptr() as *mut i8,
-                buf.len(),
-            )
+            hermes__Runtime__Description(self.raw, buf.as_mut_ptr() as *mut i8, buf.len())
         };
         buf.truncate(len);
         String::from_utf8_lossy(&buf).into_owned()
@@ -509,12 +487,7 @@ impl Runtime {
     /// Load a bytecode segment (for split bundles).
     pub fn load_segment(&self, data: &[u8], context: &Value<'_>) -> Result<()> {
         let ok = unsafe {
-            hermes__Runtime__LoadSegment(
-                self.raw,
-                data.as_ptr(),
-                data.len(),
-                &context.raw,
-            )
+            hermes__Runtime__LoadSegment(self.raw, data.as_ptr(), data.len(), &context.raw)
         };
         if !ok {
             return error::check_error(self.raw).map(|_| ());
@@ -575,9 +548,8 @@ impl Runtime {
     /// Returns `None` if there is no epilogue.
     pub fn get_bytecode_epilogue(data: &[u8]) -> Option<&[u8]> {
         let mut epilogue_len: usize = 0;
-        let ptr = unsafe {
-            hermes__GetBytecodeEpilogue(data.as_ptr(), data.len(), &mut epilogue_len)
-        };
+        let ptr =
+            unsafe { hermes__GetBytecodeEpilogue(data.as_ptr(), data.len(), &mut epilogue_len) };
         if ptr.is_null() || epilogue_len == 0 {
             None
         } else {

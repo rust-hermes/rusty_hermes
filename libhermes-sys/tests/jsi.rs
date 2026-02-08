@@ -1,4 +1,4 @@
-use libhermesabi_sys::*;
+use libhermes_sys::*;
 use std::ptr;
 
 unsafe extern "C" fn add_callback(
@@ -7,21 +7,23 @@ unsafe extern "C" fn add_callback(
     args: *const HermesValue,
     arg_count: usize,
     _user_data: *mut std::ffi::c_void,
-) -> HermesValue { unsafe {
-    assert!(arg_count >= 2);
-    let a = &*args;
-    let b = &*args.add(1);
+) -> HermesValue {
+    unsafe {
+        assert!(arg_count >= 2);
+        let a = &*args;
+        let b = &*args.add(1);
 
-    assert_eq!(a.kind, HermesValueKind_Number);
-    assert_eq!(b.kind, HermesValueKind_Number);
+        assert_eq!(a.kind, HermesValueKind_Number);
+        assert_eq!(b.kind, HermesValueKind_Number);
 
-    HermesValue {
-        kind: HermesValueKind_Number,
-        data: HermesValueData {
-            number: a.data.number + b.data.number,
-        },
+        HermesValue {
+            kind: HermesValueKind_Number,
+            data: HermesValueData {
+                number: a.data.number + b.data.number,
+            },
+        }
     }
-}}
+}
 
 unsafe extern "C" fn noop_finalizer(_user_data: *mut std::ffi::c_void) {}
 
@@ -31,8 +33,7 @@ fn host_function_add() {
         let rt = hermes__Runtime__New();
 
         // Create a PropNameID for "add".
-        let name_pni =
-            hermes__PropNameID__ForAscii(rt, b"add".as_ptr() as *const i8, 3);
+        let name_pni = hermes__PropNameID__ForAscii(rt, b"add".as_ptr() as *const i8, 3);
         assert!(!name_pni.is_null());
 
         // Create a host function.
@@ -52,12 +53,7 @@ fn host_function_add() {
             kind: HermesValueKind_Object,
             data: HermesValueData { pointer: func },
         };
-        let ok = hermes__Object__SetProperty__PropNameID(
-            rt,
-            global,
-            name_pni,
-            &func_val,
-        );
+        let ok = hermes__Object__SetProperty__PropNameID(rt, global, name_pni, &func_val);
         assert!(ok);
 
         // Evaluate "add(1, 2)".

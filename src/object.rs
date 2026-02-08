@@ -1,8 +1,8 @@
 use std::marker::PhantomData;
 
-use libhermesabi_sys::*;
+use libhermes_sys::*;
 
-use crate::error::{check_error, Error, Result};
+use crate::error::{Error, Result, check_error};
 use crate::propnameid::PropNameId;
 use crate::value::Value;
 use crate::{Array, Runtime};
@@ -29,12 +29,8 @@ impl<'rt> Object<'rt> {
 
     /// Get a property by name.
     pub fn get(&self, key: &str) -> Result<Value<'rt>> {
-        let key_pv = unsafe {
-            hermes__String__CreateFromUtf8(self.rt, key.as_ptr(), key.len())
-        };
-        let raw = unsafe {
-            hermes__Object__GetProperty__String(self.rt, self.pv, key_pv)
-        };
+        let key_pv = unsafe { hermes__String__CreateFromUtf8(self.rt, key.as_ptr(), key.len()) };
+        let raw = unsafe { hermes__Object__GetProperty__String(self.rt, self.pv, key_pv) };
         unsafe { hermes__String__Release(key_pv) };
         check_error(self.rt)?;
         Ok(unsafe { Value::from_raw(self.rt, raw) })
@@ -42,12 +38,8 @@ impl<'rt> Object<'rt> {
 
     /// Set a property by name.
     pub fn set(&self, key: &str, val: Value<'rt>) -> Result<()> {
-        let key_pv = unsafe {
-            hermes__String__CreateFromUtf8(self.rt, key.as_ptr(), key.len())
-        };
-        let ok = unsafe {
-            hermes__Object__SetProperty__String(self.rt, self.pv, key_pv, &val.raw)
-        };
+        let key_pv = unsafe { hermes__String__CreateFromUtf8(self.rt, key.as_ptr(), key.len()) };
+        let ok = unsafe { hermes__Object__SetProperty__String(self.rt, self.pv, key_pv, &val.raw) };
         unsafe { hermes__String__Release(key_pv) };
         if !ok {
             return check_error(self.rt).map(|_| ());
@@ -57,12 +49,8 @@ impl<'rt> Object<'rt> {
 
     /// Check whether a property exists.
     pub fn has(&self, key: &str) -> bool {
-        let key_pv = unsafe {
-            hermes__String__CreateFromUtf8(self.rt, key.as_ptr(), key.len())
-        };
-        let result = unsafe {
-            hermes__Object__HasProperty__String(self.rt, self.pv, key_pv)
-        };
+        let key_pv = unsafe { hermes__String__CreateFromUtf8(self.rt, key.as_ptr(), key.len()) };
+        let result = unsafe { hermes__Object__HasProperty__String(self.rt, self.pv, key_pv) };
         unsafe { hermes__String__Release(key_pv) };
         result
     }
@@ -71,22 +59,15 @@ impl<'rt> Object<'rt> {
 
     /// Get a property using a [`PropNameId`] key.
     pub fn get_with_propname(&self, key: &PropNameId<'rt>) -> Result<Value<'rt>> {
-        let raw = unsafe {
-            hermes__Object__GetProperty__PropNameID(self.rt, self.pv, key.pv)
-        };
+        let raw = unsafe { hermes__Object__GetProperty__PropNameID(self.rt, self.pv, key.pv) };
         check_error(self.rt)?;
         Ok(unsafe { Value::from_raw(self.rt, raw) })
     }
 
     /// Set a property using a [`PropNameId`] key.
-    pub fn set_with_propname(
-        &self,
-        key: &PropNameId<'rt>,
-        val: Value<'rt>,
-    ) -> Result<()> {
-        let ok = unsafe {
-            hermes__Object__SetProperty__PropNameID(self.rt, self.pv, key.pv, &val.raw)
-        };
+    pub fn set_with_propname(&self, key: &PropNameId<'rt>, val: Value<'rt>) -> Result<()> {
+        let ok =
+            unsafe { hermes__Object__SetProperty__PropNameID(self.rt, self.pv, key.pv, &val.raw) };
         if !ok {
             return check_error(self.rt).map(|_| ());
         }
@@ -95,9 +76,7 @@ impl<'rt> Object<'rt> {
 
     /// Check whether a property exists using a [`PropNameId`] key.
     pub fn has_with_propname(&self, key: &PropNameId<'rt>) -> bool {
-        unsafe {
-            hermes__Object__HasProperty__PropNameID(self.rt, self.pv, key.pv)
-        }
+        unsafe { hermes__Object__HasProperty__PropNameID(self.rt, self.pv, key.pv) }
     }
 
     // -- host object support ---------------------------------------------------
@@ -114,21 +93,23 @@ impl<'rt> Object<'rt> {
         get_names_cb: HermesHostObjectGetPropertyNamesCallback,
         user_data: *mut std::ffi::c_void,
         finalizer: HermesHostObjectFinalizer,
-    ) -> Self { unsafe {
-        let pv = hermes__Object__CreateFromHostObject(
-            rt.raw,
-            get_cb,
-            set_cb,
-            get_names_cb,
-            user_data,
-            finalizer,
-        );
-        Object {
-            pv,
-            rt: rt.raw,
-            _marker: PhantomData,
+    ) -> Self {
+        unsafe {
+            let pv = hermes__Object__CreateFromHostObject(
+                rt.raw,
+                get_cb,
+                set_cb,
+                get_names_cb,
+                user_data,
+                finalizer,
+            );
+            Object {
+                pv,
+                rt: rt.raw,
+                _marker: PhantomData,
+            }
         }
-    }}
+    }
 
     /// Get the opaque user_data pointer from a HostObject, or null if not a HostObject.
     pub fn get_host_object_data(&self) -> *mut std::ffi::c_void {
@@ -170,9 +151,7 @@ impl<'rt> Object<'rt> {
 
     /// Hint to the GC about external memory associated with this object.
     pub fn set_external_memory_pressure(&self, amount: usize) {
-        unsafe {
-            hermes__Object__SetExternalMemoryPressure(self.rt, self.pv, amount)
-        }
+        unsafe { hermes__Object__SetExternalMemoryPressure(self.rt, self.pv, amount) }
     }
 
     /// Check if this object has attached native state.
@@ -194,9 +173,11 @@ impl<'rt> Object<'rt> {
         &self,
         data: *mut std::ffi::c_void,
         finalizer: HermesNativeStateFinalizer,
-    ) { unsafe {
-        hermes__Object__SetNativeState(self.rt, self.pv, data, finalizer);
-    }}
+    ) {
+        unsafe {
+            hermes__Object__SetNativeState(self.rt, self.pv, data, finalizer);
+        }
+    }
 
     /// Check if this object is a HostObject.
     pub fn is_host_object(&self) -> bool {
@@ -207,12 +188,8 @@ impl<'rt> Object<'rt> {
 
     /// Delete a property by name.
     pub fn delete(&self, key: &str) -> Result<()> {
-        let key_pv = unsafe {
-            hermes__String__CreateFromUtf8(self.rt, key.as_ptr(), key.len())
-        };
-        let ok = unsafe {
-            hermes__Object__DeleteProperty__String(self.rt, self.pv, key_pv)
-        };
+        let key_pv = unsafe { hermes__String__CreateFromUtf8(self.rt, key.as_ptr(), key.len()) };
+        let ok = unsafe { hermes__Object__DeleteProperty__String(self.rt, self.pv, key_pv) };
         unsafe { hermes__String__Release(key_pv) };
         if !ok {
             return check_error(self.rt).map(|_| ());
@@ -222,9 +199,7 @@ impl<'rt> Object<'rt> {
 
     /// Delete a property using a [`PropNameId`] key.
     pub fn delete_with_propname(&self, key: &PropNameId<'rt>) -> Result<()> {
-        let ok = unsafe {
-            hermes__Object__DeleteProperty__PropNameID(self.rt, self.pv, key.pv)
-        };
+        let ok = unsafe { hermes__Object__DeleteProperty__PropNameID(self.rt, self.pv, key.pv) };
         if !ok {
             return check_error(self.rt).map(|_| ());
         }
@@ -233,9 +208,7 @@ impl<'rt> Object<'rt> {
 
     /// Delete a property using a [`Value`] key (computed property access).
     pub fn delete_with_value(&self, key: &Value<'rt>) -> Result<()> {
-        let ok = unsafe {
-            hermes__Object__DeleteProperty__Value(self.rt, self.pv, &key.raw)
-        };
+        let ok = unsafe { hermes__Object__DeleteProperty__Value(self.rt, self.pv, &key.raw) };
         if !ok {
             return check_error(self.rt).map(|_| ());
         }
@@ -246,18 +219,15 @@ impl<'rt> Object<'rt> {
 
     /// Get a property using a [`Value`] key (computed property access).
     pub fn get_with_value(&self, key: &Value<'rt>) -> Result<Value<'rt>> {
-        let raw = unsafe {
-            hermes__Object__GetProperty__Value(self.rt, self.pv, &key.raw)
-        };
+        let raw = unsafe { hermes__Object__GetProperty__Value(self.rt, self.pv, &key.raw) };
         check_error(self.rt)?;
         Ok(unsafe { Value::from_raw(self.rt, raw) })
     }
 
     /// Set a property using a [`Value`] key (computed property access).
     pub fn set_with_value(&self, key: &Value<'rt>, val: Value<'rt>) -> Result<()> {
-        let ok = unsafe {
-            hermes__Object__SetProperty__Value(self.rt, self.pv, &key.raw, &val.raw)
-        };
+        let ok =
+            unsafe { hermes__Object__SetProperty__Value(self.rt, self.pv, &key.raw, &val.raw) };
         if !ok {
             return check_error(self.rt).map(|_| ());
         }
@@ -266,18 +236,14 @@ impl<'rt> Object<'rt> {
 
     /// Check whether a property exists using a [`Value`] key (computed property access).
     pub fn has_with_value(&self, key: &Value<'rt>) -> bool {
-        unsafe {
-            hermes__Object__HasProperty__Value(self.rt, self.pv, &key.raw)
-        }
+        unsafe { hermes__Object__HasProperty__Value(self.rt, self.pv, &key.raw) }
     }
 
     // -- prototype operations --------------------------------------------------
 
     /// Create a new object with the given prototype.
     pub fn create_with_prototype(rt: &'rt Runtime, prototype: &Value<'rt>) -> Result<Self> {
-        let pv = unsafe {
-            hermes__Object__CreateWithPrototype(rt.raw, &prototype.raw)
-        };
+        let pv = unsafe { hermes__Object__CreateWithPrototype(rt.raw, &prototype.raw) };
         check_error(rt.raw)?;
         Ok(Object {
             pv,
@@ -288,9 +254,7 @@ impl<'rt> Object<'rt> {
 
     /// Set the prototype of this object.
     pub fn set_prototype(&self, prototype: &Value<'rt>) -> Result<()> {
-        let ok = unsafe {
-            hermes__Object__SetPrototype(self.rt, self.pv, &prototype.raw)
-        };
+        let ok = unsafe { hermes__Object__SetPrototype(self.rt, self.pv, &prototype.raw) };
         if !ok {
             return check_error(self.rt).map(|_| ());
         }
@@ -299,9 +263,7 @@ impl<'rt> Object<'rt> {
 
     /// Get the prototype of this object.
     pub fn get_prototype(&self) -> Result<Value<'rt>> {
-        let raw = unsafe {
-            hermes__Object__GetPrototype(self.rt, self.pv)
-        };
+        let raw = unsafe { hermes__Object__GetPrototype(self.rt, self.pv) };
         check_error(self.rt)?;
         Ok(unsafe { Value::from_raw(self.rt, raw) })
     }

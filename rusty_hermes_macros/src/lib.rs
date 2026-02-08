@@ -3,7 +3,7 @@ mod into_js;
 mod op;
 
 use proc_macro::TokenStream;
-use syn::{parse_macro_input, DeriveInput, ItemFn};
+use syn::{DeriveInput, ItemFn, parse_macro_input};
 
 /// Derive `IntoJs` for a struct or enum.
 ///

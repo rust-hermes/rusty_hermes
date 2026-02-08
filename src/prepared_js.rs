@@ -1,4 +1,4 @@
-use libhermesabi_sys::*;
+use libhermes_sys::*;
 
 /// A pre-compiled JavaScript script.
 ///

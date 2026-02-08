@@ -1,8 +1,8 @@
 use std::marker::PhantomData;
 
-use libhermesabi_sys::*;
+use libhermes_sys::*;
 
-use crate::error::{check_error, Error, Result};
+use crate::error::{Error, Result, check_error};
 use crate::value::Value;
 
 /// A JavaScript function handle.
@@ -21,13 +21,7 @@ impl<'rt> Function<'rt> {
             data: HermesValueData { number: 0.0 },
         };
         let raw = unsafe {
-            hermes__Function__Call(
-                self.rt,
-                self.pv,
-                &this,
-                c_args.as_ptr(),
-                c_args.len(),
-            )
+            hermes__Function__Call(self.rt, self.pv, &this, c_args.as_ptr(), c_args.len())
         };
         check_error(self.rt)?;
         Ok(unsafe { Value::from_raw(self.rt, raw) })
@@ -37,32 +31,17 @@ impl<'rt> Function<'rt> {
     pub fn call_as_constructor(&self, args: &[Value<'rt>]) -> Result<Value<'rt>> {
         let c_args: Vec<HermesValue> = args.iter().map(|a| a.raw).collect();
         let raw = unsafe {
-            hermes__Function__CallAsConstructor(
-                self.rt,
-                self.pv,
-                c_args.as_ptr(),
-                c_args.len(),
-            )
+            hermes__Function__CallAsConstructor(self.rt, self.pv, c_args.as_ptr(), c_args.len())
         };
         check_error(self.rt)?;
         Ok(unsafe { Value::from_raw(self.rt, raw) })
     }
 
     /// Call this function with a specific `this` value.
-    pub fn call_with_this(
-        &self,
-        this: &Value<'rt>,
-        args: &[Value<'rt>],
-    ) -> Result<Value<'rt>> {
+    pub fn call_with_this(&self, this: &Value<'rt>, args: &[Value<'rt>]) -> Result<Value<'rt>> {
         let c_args: Vec<HermesValue> = args.iter().map(|a| a.raw).collect();
         let raw = unsafe {
-            hermes__Function__Call(
-                self.rt,
-                self.pv,
-                &this.raw,
-                c_args.as_ptr(),
-                c_args.len(),
-            )
+            hermes__Function__Call(self.rt, self.pv, &this.raw, c_args.as_ptr(), c_args.len())
         };
         check_error(self.rt)?;
         Ok(unsafe { Value::from_raw(self.rt, raw) })
@@ -210,9 +189,7 @@ impl IntoJsRet for bool {
 
 impl IntoJsRet for String {
     unsafe fn into_ret(self, rt: *mut HermesRt) -> Result<HermesValue> {
-        let pv = unsafe {
-            hermes__String__CreateFromUtf8(rt, self.as_ptr(), self.len())
-        };
+        let pv = unsafe { hermes__String__CreateFromUtf8(rt, self.as_ptr(), self.len()) };
         Ok(HermesValue {
             kind: HermesValueKind_String,
             data: HermesValueData { pointer: pv },

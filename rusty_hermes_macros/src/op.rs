@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{parse::Parse, parse::ParseStream, FnArg, ItemFn, LitStr, Pat, Token};
+use syn::{FnArg, ItemFn, LitStr, Pat, Token, parse::Parse, parse::ParseStream};
 
 pub struct OpArgs {
     pub name: Option<String>,

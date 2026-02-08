@@ -3,7 +3,7 @@
 //! Run with:
 //!   cargo run --example derive
 
-use rusty_hermes::{hermes_op, FromJs, IntoJs, Runtime};
+use rusty_hermes::{FromJs, IntoJs, Runtime, hermes_op};
 
 #[derive(IntoJs, FromJs, Debug, PartialEq)]
 struct User {

@@ -1,4 +1,4 @@
-# libhermesabi-sys
+# libhermes-sys
 
 > [!WARNING]
 > This crate currently only supports Linux and macOS. Adding Windows support should be trivial.
@@ -12,7 +12,7 @@ For a safe, high-level API, see [`rusty_hermes`](../).
 ## Example
 
 ```rust
-use libhermesabi_sys::*;
+use libhermes_sys::*;
 
 unsafe {
     let rt = hermes__Runtime__New();
@@ -78,5 +78,5 @@ brew install cmake git ninja
 Add to your **Cargo.toml**:
 
 ```toml
-libhermesabi-sys = { git = "https://github.com/rust-hermes/rusty_hermes", branch = "main" }
+libhermes-sys = { git = "https://github.com/rust-hermes/rusty_hermes", branch = "main" }
 ```

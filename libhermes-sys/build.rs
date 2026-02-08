@@ -5,8 +5,7 @@ use std::path::PathBuf;
 
 fn main() {
     let hermes_src_dir = "hermes";
-    let manifest_dir =
-        PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let hermes_src = manifest_dir.join(hermes_src_dir);
 
     println!("cargo:rerun-if-changed=src/binding.cc");
@@ -26,7 +25,7 @@ fn main() {
 
     let hermes_build_dir = format!("{}/build", hermes_build.display());
 
-    // Expose the build directory to dependent crates via DEP_HERMESABI_BUILD_DIR.
+    // Expose the build directory to dependent crates via DEP_HERMES_BUILD_DIR.
     println!("cargo:build_dir={}", hermes_build_dir);
 
     // Compile our C++ binding layer with the cc crate.
@@ -53,10 +52,7 @@ fn main() {
             if ext == "a" {
                 let dir = entry.parent().unwrap();
                 if search_dirs.insert(dir.to_path_buf()) {
-                    println!(
-                        "cargo:rustc-link-search=native={}",
-                        dir.display()
-                    );
+                    println!("cargo:rustc-link-search=native={}", dir.display());
                 }
                 // Strip the "lib" prefix and ".a" suffix to get the link name.
                 let stem = entry.file_stem().unwrap().to_str().unwrap();

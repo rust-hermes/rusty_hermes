@@ -1,19 +1,16 @@
 use std::marker::PhantomData;
 
-use libhermesabi_sys::*;
+use libhermes_sys::*;
 
+use crate::Runtime;
 use crate::error::{Error, Result};
 use crate::value::Value;
-use crate::Runtime;
 
 /// Read a JS string pointer value into a Rust `String`.
 ///
 /// Calls `hermes__String__ToUtf8` twice: once for the byte length, once to
 /// fill the buffer. Returns `Err` if the bytes are not valid UTF-8.
-pub(crate) fn pv_to_rust_string(
-    rt: *mut HermesRt,
-    pv: *const std::ffi::c_void,
-) -> Result<String> {
+pub(crate) fn pv_to_rust_string(rt: *mut HermesRt, pv: *const std::ffi::c_void) -> Result<String> {
     let needed = unsafe { hermes__String__ToUtf8(rt, pv, std::ptr::null_mut(), 0) };
     if needed == 0 {
         return Ok(String::new());
@@ -27,10 +24,7 @@ pub(crate) fn pv_to_rust_string(
 
 /// Read a JS string pointer value into a Rust `String`, using lossy
 /// conversion for invalid UTF-8.
-pub(crate) fn pv_to_rust_string_lossy(
-    rt: *mut HermesRt,
-    pv: *const std::ffi::c_void,
-) -> String {
+pub(crate) fn pv_to_rust_string_lossy(rt: *mut HermesRt, pv: *const std::ffi::c_void) -> String {
     let needed = unsafe { hermes__String__ToUtf8(rt, pv, std::ptr::null_mut(), 0) };
     if needed == 0 {
         return String::new();
@@ -52,9 +46,7 @@ pub struct JsString<'rt> {
 impl<'rt> JsString<'rt> {
     /// Create a JS string from a Rust `&str`.
     pub fn new(rt: &'rt Runtime, s: &str) -> Self {
-        let pv = unsafe {
-            hermes__String__CreateFromUtf8(rt.raw, s.as_ptr(), s.len())
-        };
+        let pv = unsafe { hermes__String__CreateFromUtf8(rt.raw, s.as_ptr(), s.len()) };
         JsString {
             pv,
             rt: rt.raw,
@@ -67,9 +59,8 @@ impl<'rt> JsString<'rt> {
     /// Slightly more efficient than [`new`](Self::new) when the input is known
     /// to be pure ASCII.
     pub fn from_ascii(rt: &'rt Runtime, s: &str) -> Self {
-        let pv = unsafe {
-            hermes__String__CreateFromAscii(rt.raw, s.as_ptr() as *const i8, s.len())
-        };
+        let pv =
+            unsafe { hermes__String__CreateFromAscii(rt.raw, s.as_ptr() as *const i8, s.len()) };
         JsString {
             pv,
             rt: rt.raw,

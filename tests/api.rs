@@ -1,6 +1,6 @@
 use rusty_hermes::{
-    hermes_op, Array, ArrayBuffer, BigInt, Function, JsString, Object, PropNameId, Runtime,
-    RuntimeConfig, Scope, Value, WeakObject,
+    Array, ArrayBuffer, BigInt, Function, JsString, Object, PropNameId, Runtime, RuntimeConfig,
+    Scope, Value, WeakObject, hermes_op,
 };
 
 #[test]
@@ -59,7 +59,11 @@ fn global_property() {
 #[test]
 fn object_get_set() {
     let rt = Runtime::new().unwrap();
-    let obj: Object = rt.eval("({a: 1, b: 'two'})").unwrap().into_object().unwrap();
+    let obj: Object = rt
+        .eval("({a: 1, b: 'two'})")
+        .unwrap()
+        .into_object()
+        .unwrap();
 
     let a = obj.get("a").unwrap();
     assert_eq!(a.as_number(), Some(1.0));
@@ -75,7 +79,11 @@ fn object_get_set() {
 #[test]
 fn object_property_names() {
     let rt = Runtime::new().unwrap();
-    let obj: Object = rt.eval("({x: 1, y: 2, z: 3})").unwrap().into_object().unwrap();
+    let obj: Object = rt
+        .eval("({x: 1, y: 2, z: 3})")
+        .unwrap()
+        .into_object()
+        .unwrap();
     let names = obj.property_names().unwrap();
     assert_eq!(names.len(), 3);
 }
@@ -118,7 +126,9 @@ fn create_array() {
 }
 
 #[hermes_op]
-fn host_add(a: f64, b: f64) -> f64 { a + b }
+fn host_add(a: f64, b: f64) -> f64 {
+    a + b
+}
 
 #[test]
 fn host_function_add() {
@@ -143,7 +153,9 @@ fn host_function_string() {
 }
 
 #[hermes_op(name = "getFortyTwo")]
-fn get_forty_two() -> f64 { 42.0 }
+fn get_forty_two() -> f64 {
+    42.0
+}
 
 #[test]
 fn host_function_no_args() {
@@ -154,7 +166,9 @@ fn host_function_no_args() {
 }
 
 #[hermes_op]
-fn sum3(a: f64, b: f64, c: f64) -> f64 { a + b + c }
+fn sum3(a: f64, b: f64, c: f64) -> f64 {
+    a + b + c
+}
 
 #[test]
 fn host_function_three_args() {
@@ -167,7 +181,11 @@ fn host_function_three_args() {
 #[test]
 fn function_call() {
     let rt = Runtime::new().unwrap();
-    let func: Function = rt.eval("(function(x) { return x * 2; })").unwrap().into_function().unwrap();
+    let func: Function = rt
+        .eval("(function(x) { return x * 2; })")
+        .unwrap()
+        .into_function()
+        .unwrap();
 
     let result = func.call(&[Value::from_number(21.0)]).unwrap();
     assert_eq!(result.as_number(), Some(42.0));
@@ -212,12 +230,30 @@ fn type_error_conversion() {
 fn value_kind() {
     let rt = Runtime::new().unwrap();
 
-    assert_eq!(rt.eval("undefined").unwrap().kind(), rusty_hermes::ValueKind::Undefined);
-    assert_eq!(rt.eval("null").unwrap().kind(), rusty_hermes::ValueKind::Null);
-    assert_eq!(rt.eval("true").unwrap().kind(), rusty_hermes::ValueKind::Boolean);
-    assert_eq!(rt.eval("42").unwrap().kind(), rusty_hermes::ValueKind::Number);
-    assert_eq!(rt.eval("'hi'").unwrap().kind(), rusty_hermes::ValueKind::String);
-    assert_eq!(rt.eval("({})").unwrap().kind(), rusty_hermes::ValueKind::Object);
+    assert_eq!(
+        rt.eval("undefined").unwrap().kind(),
+        rusty_hermes::ValueKind::Undefined
+    );
+    assert_eq!(
+        rt.eval("null").unwrap().kind(),
+        rusty_hermes::ValueKind::Null
+    );
+    assert_eq!(
+        rt.eval("true").unwrap().kind(),
+        rusty_hermes::ValueKind::Boolean
+    );
+    assert_eq!(
+        rt.eval("42").unwrap().kind(),
+        rusty_hermes::ValueKind::Number
+    );
+    assert_eq!(
+        rt.eval("'hi'").unwrap().kind(),
+        rusty_hermes::ValueKind::String
+    );
+    assert_eq!(
+        rt.eval("({})").unwrap().kind(),
+        rusty_hermes::ValueKind::Object
+    );
 }
 
 #[test]
@@ -500,7 +536,9 @@ fn prepared_javascript() {
 #[test]
 fn create_value_from_json() {
     let rt = Runtime::new().unwrap();
-    let val = rt.create_value_from_json(r#"{"a": 1, "b": "two"}"#).unwrap();
+    let val = rt
+        .create_value_from_json(r#"{"a": 1, "b": "two"}"#)
+        .unwrap();
     let obj = val.into_object().unwrap();
     assert_eq!(obj.get("a").unwrap().as_number(), Some(1.0));
     let b = obj.get("b").unwrap().into_string().unwrap();
@@ -558,7 +596,8 @@ fn object_get_set_with_propname() {
     let obj = Object::new(&rt);
     let key = PropNameId::from_utf8(&rt, "myProp");
 
-    obj.set_with_propname(&key, Value::from_number(99.0)).unwrap();
+    obj.set_with_propname(&key, Value::from_number(99.0))
+        .unwrap();
     assert!(obj.has_with_propname(&key));
 
     let val = obj.get_with_propname(&key).unwrap();
@@ -580,25 +619,26 @@ fn host_object_create() {
     };
 
     unsafe extern "C" fn get_cb(
-        _rt: *mut libhermesabi_sys::HermesRt,
+        _rt: *mut libhermes_sys::HermesRt,
         _name: *const std::ffi::c_void,
         _user_data: *mut std::ffi::c_void,
-    ) -> libhermesabi_sys::HermesValue {
-        libhermesabi_sys::HermesValue {
-            kind: libhermesabi_sys::HermesValueKind_Number,
-            data: libhermesabi_sys::HermesValueData { number: 42.0 },
+    ) -> libhermes_sys::HermesValue {
+        libhermes_sys::HermesValue {
+            kind: libhermes_sys::HermesValueKind_Number,
+            data: libhermes_sys::HermesValueData { number: 42.0 },
         }
     }
 
     unsafe extern "C" fn set_cb(
-        _rt: *mut libhermesabi_sys::HermesRt,
+        _rt: *mut libhermes_sys::HermesRt,
         _name: *const std::ffi::c_void,
-        _value: *const libhermesabi_sys::HermesValue,
+        _value: *const libhermes_sys::HermesValue,
         _user_data: *mut std::ffi::c_void,
-    ) {}
+    ) {
+    }
 
     unsafe extern "C" fn get_names_cb(
-        _rt: *mut libhermesabi_sys::HermesRt,
+        _rt: *mut libhermes_sys::HermesRt,
         out_count: *mut usize,
         _user_data: *mut std::ffi::c_void,
     ) -> *mut *mut std::ffi::c_void {

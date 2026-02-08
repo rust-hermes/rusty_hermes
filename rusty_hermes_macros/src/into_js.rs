@@ -11,7 +11,7 @@ pub fn expand(input: &DeriveInput) -> TokenStream {
         Data::Enum(data) => expand_enum(name, data),
         Data::Union(_) => {
             return syn::Error::new_spanned(input, "IntoJs cannot be derived for unions")
-                .to_compile_error()
+                .to_compile_error();
         }
     };
 
@@ -23,7 +23,7 @@ pub fn expand(input: &DeriveInput) -> TokenStream {
         }
 
         impl #impl_generics rusty_hermes::__private::IntoJsRet for #name #ty_generics #where_clause {
-            unsafe fn into_ret(self, rt: *mut libhermesabi_sys::HermesRt) -> rusty_hermes::Result<libhermesabi_sys::HermesValue> {
+            unsafe fn into_ret(self, rt: *mut libhermes_sys::HermesRt) -> rusty_hermes::Result<libhermes_sys::HermesValue> {
                 let rt_ref = unsafe { rusty_hermes::Runtime::borrow_raw(rt) };
                 let val = rusty_hermes::IntoJs::into_js(self, &rt_ref)?;
                 Ok(val.into_raw())
@@ -103,13 +103,20 @@ fn expand_enum(name: &syn::Ident, data: &syn::DataEnum) -> TokenStream {
                     }
                 }
                 Fields::Named(named) => {
-                    let field_idents: Vec<_> = named.named.iter().map(|f| f.ident.as_ref().unwrap()).collect();
-                    let field_sets: Vec<_> = field_idents.iter().map(|ident| {
-                        let key = ident.to_string();
-                        quote! {
-                            inner.set(#key, rusty_hermes::IntoJs::into_js(#ident, rt)?)?;
-                        }
-                    }).collect();
+                    let field_idents: Vec<_> = named
+                        .named
+                        .iter()
+                        .map(|f| f.ident.as_ref().unwrap())
+                        .collect();
+                    let field_sets: Vec<_> = field_idents
+                        .iter()
+                        .map(|ident| {
+                            let key = ident.to_string();
+                            quote! {
+                                inner.set(#key, rusty_hermes::IntoJs::into_js(#ident, rt)?)?;
+                            }
+                        })
+                        .collect();
                     quote! {
                         Self::#vname { #(#field_idents),* } => {
                             let inner = rusty_hermes::Object::new(rt);
@@ -134,13 +141,19 @@ fn expand_enum(name: &syn::Ident, data: &syn::DataEnum) -> TokenStream {
                     } else {
                         // Tuple variant: {"Variant": [a, b, ...]}
                         let field_names: Vec<_> = (0..unnamed.unnamed.len())
-                            .map(|i| syn::Ident::new(&format!("f{i}"), proc_macro2::Span::call_site()))
+                            .map(|i| {
+                                syn::Ident::new(&format!("f{i}"), proc_macro2::Span::call_site())
+                            })
                             .collect();
-                        let sets: Vec<_> = field_names.iter().enumerate().map(|(i, f)| {
-                            quote! {
-                                arr.set(#i, rusty_hermes::IntoJs::into_js(#f, rt)?)?;
-                            }
-                        }).collect();
+                        let sets: Vec<_> = field_names
+                            .iter()
+                            .enumerate()
+                            .map(|(i, f)| {
+                                quote! {
+                                    arr.set(#i, rusty_hermes::IntoJs::into_js(#f, rt)?)?;
+                                }
+                            })
+                            .collect();
                         let len = unnamed.unnamed.len();
                         quote! {
                             Self::#vname(#(#field_names),*) => {

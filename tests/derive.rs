@@ -1,4 +1,4 @@
-use rusty_hermes::{hermes_op, FromJs, IntoJs, Runtime};
+use rusty_hermes::{FromJs, IntoJs, Runtime, hermes_op};
 
 // -- IntoJs / FromJs derive for structs ---------------------------------------
 
@@ -221,7 +221,10 @@ fn trampoline_error_becomes_js_exception() {
     let result = rt.eval("fail()");
     assert!(result.is_err());
     let err_msg = format!("{}", result.unwrap_err());
-    assert!(err_msg.contains("boom"), "error should contain 'boom': {err_msg}");
+    assert!(
+        err_msg.contains("boom"),
+        "error should contain 'boom': {err_msg}"
+    );
 }
 
 #[hermes_op]
@@ -312,8 +315,7 @@ fn roundtrip_hashset() {
     let rt = Runtime::new().unwrap();
     let set: std::collections::HashSet<i32> = [1, 2, 3].into_iter().collect();
     let val = rusty_hermes::IntoJs::into_js(set, &rt).unwrap();
-    let set2: std::collections::HashSet<i32> =
-        rusty_hermes::FromJs::from_js(&rt, &val).unwrap();
+    let set2: std::collections::HashSet<i32> = rusty_hermes::FromJs::from_js(&rt, &val).unwrap();
     assert_eq!(set2.len(), 3);
     assert!(set2.contains(&1));
     assert!(set2.contains(&2));
@@ -327,8 +329,6 @@ fn roundtrip_btreeset() {
     let rt = Runtime::new().unwrap();
     let set: std::collections::BTreeSet<i32> = [10, 20, 30].into_iter().collect();
     let val = rusty_hermes::IntoJs::into_js(set, &rt).unwrap();
-    let set2: std::collections::BTreeSet<i32> =
-        rusty_hermes::FromJs::from_js(&rt, &val).unwrap();
+    let set2: std::collections::BTreeSet<i32> = rusty_hermes::FromJs::from_js(&rt, &val).unwrap();
     assert_eq!(set2, [10, 20, 30].into_iter().collect());
 }
-

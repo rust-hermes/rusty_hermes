@@ -11,7 +11,7 @@ pub fn expand(input: &DeriveInput) -> TokenStream {
         Data::Enum(data) => expand_enum(name, data),
         Data::Union(_) => {
             return syn::Error::new_spanned(input, "FromJs cannot be derived for unions")
-                .to_compile_error()
+                .to_compile_error();
         }
     };
 
@@ -30,8 +30,8 @@ pub fn expand(input: &DeriveInput) -> TokenStream {
 
         impl #impl_generics rusty_hermes::__private::FromJsArg for #name #ty_generics #where_clause {
             unsafe fn from_arg(
-                rt: *mut libhermesabi_sys::HermesRt,
-                raw: &libhermesabi_sys::HermesValue,
+                rt: *mut libhermes_sys::HermesRt,
+                raw: &libhermes_sys::HermesValue,
             ) -> rusty_hermes::Result<Self> {
                 #from_js_arg_body
             }
@@ -113,56 +113,56 @@ fn expand_enum(name: &syn::Ident, data: &syn::DataEnum) -> TokenStream {
         .collect();
 
     // Collect non-unit variants for object matching
-    let object_arms: Vec<_> = data
-        .variants
-        .iter()
-        .filter(|v| !matches!(v.fields, Fields::Unit))
-        .map(|v| {
-            let vname = &v.ident;
-            let vname_str = vname.to_string();
-            match &v.fields {
-                Fields::Named(named) => {
-                    let field_inits: Vec<_> = named.named.iter().map(|f| {
+    let object_arms: Vec<_> =
+        data.variants
+            .iter()
+            .filter(|v| !matches!(v.fields, Fields::Unit))
+            .map(|v| {
+                let vname = &v.ident;
+                let vname_str = vname.to_string();
+                match &v.fields {
+                    Fields::Named(named) => {
+                        let field_inits: Vec<_> = named.named.iter().map(|f| {
                         let ident = f.ident.as_ref().unwrap();
                         let key = ident.to_string();
                         quote! {
                             #ident: rusty_hermes::FromJs::from_js(rt, &inner_obj.get(#key)?)?,
                         }
                     }).collect();
-                    quote! {
-                        #vname_str => {
-                            let inner_obj = payload.into_object()?;
-                            Ok(Self::#vname { #(#field_inits)* })
-                        }
-                    }
-                }
-                Fields::Unnamed(unnamed) => {
-                    if unnamed.unnamed.len() == 1 {
                         quote! {
                             #vname_str => {
-                                Ok(Self::#vname(rusty_hermes::FromJs::from_js(rt, &payload)?))
+                                let inner_obj = payload.into_object()?;
+                                Ok(Self::#vname { #(#field_inits)* })
                             }
                         }
-                    } else {
-                        let field_inits: Vec<_> = (0..unnamed.unnamed.len())
-                            .map(|i| {
-                                quote! {
-                                    rusty_hermes::FromJs::from_js(rt, &arr.get(#i)?)?,
+                    }
+                    Fields::Unnamed(unnamed) => {
+                        if unnamed.unnamed.len() == 1 {
+                            quote! {
+                                #vname_str => {
+                                    Ok(Self::#vname(rusty_hermes::FromJs::from_js(rt, &payload)?))
                                 }
-                            })
-                            .collect();
-                        quote! {
-                            #vname_str => {
-                                let arr = payload.into_array()?;
-                                Ok(Self::#vname(#(#field_inits)*))
+                            }
+                        } else {
+                            let field_inits: Vec<_> = (0..unnamed.unnamed.len())
+                                .map(|i| {
+                                    quote! {
+                                        rusty_hermes::FromJs::from_js(rt, &arr.get(#i)?)?,
+                                    }
+                                })
+                                .collect();
+                            quote! {
+                                #vname_str => {
+                                    let arr = payload.into_array()?;
+                                    Ok(Self::#vname(#(#field_inits)*))
+                                }
                             }
                         }
                     }
+                    Fields::Unit => unreachable!(),
                 }
-                Fields::Unit => unreachable!(),
-            }
-        })
-        .collect();
+            })
+            .collect();
 
     let has_unit = !unit_arms.is_empty();
     let has_object = !object_arms.is_empty();

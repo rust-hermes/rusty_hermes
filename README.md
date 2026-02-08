@@ -73,7 +73,7 @@ rt.eval("add_points({x: 1, y: 2}, {x: 3, y: 4})").unwrap();
 
 - [`rusty_hermes`](./) - High-level, safe Rust bindings with lifetime-based memory safety.
 - [`rusty_hermes_macros`](./rusty_hermes_macros) - Derive macros for `IntoJs`, `FromJs`, and `#[hermes_op]`.
-- [`libhermesabi-sys`](./libhermesabi-sys) - Low-level C FFI bindings (rusty_v8 style).
+- [`libhermes-sys`](./libhermes-sys) - Low-level C FFI bindings (rusty_v8 style).
 
 ## Features
 
