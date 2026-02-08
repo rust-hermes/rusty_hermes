@@ -468,6 +468,14 @@ const char* hermes__Runtime__GetAndClearErrorMessage(HermesRt* hrt) {
   return msg; // Caller must free() this.
 }
 
+void hermes__Runtime__SetPendingErrorMessage(HermesRt* hrt, const char* msg,
+                                             size_t len) {
+  free(hrt->pending_error_message);
+  hrt->pending_error_message = static_cast<char*>(malloc(len + 1));
+  memcpy(hrt->pending_error_message, msg, len);
+  hrt->pending_error_message[len] = '\0';
+}
+
 void* hermes__Runtime__Global(HermesRt* hrt) {
   jsi::Object global = hrt->runtime->global();
   return steal_pointer(std::move(global));

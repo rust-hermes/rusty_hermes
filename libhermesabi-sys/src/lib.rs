@@ -154,6 +154,13 @@ unsafe extern "C" {
         rt: *mut HermesRt,
     ) -> *const c_char;
 
+    /// Set a pending error message on the runtime (for trampoline error propagation).
+    pub fn hermes__Runtime__SetPendingErrorMessage(
+        rt: *mut HermesRt,
+        msg: *const u8,
+        len: usize,
+    );
+
     pub fn hermes__Runtime__Global(rt: *mut HermesRt) -> *mut std::ffi::c_void;
 
     pub fn hermes__Runtime__Description(
