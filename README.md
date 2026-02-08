@@ -80,13 +80,12 @@ rt.eval("add_points({x: 1, y: 2}, {x: 3, y: 4})").unwrap();
 - **Evaluate JavaScript** — eval strings, prepared scripts, and JSON
 - **Type-safe values** — numbers, strings, booleans, objects, arrays, symbols, bigints, arraybuffers
 - **Rich type conversions** — `IntoJs`/`FromJs` for all numeric types, `String`, `bool`, `Option<T>`, `Vec<T>`, `HashMap<String, T>`, `BTreeMap<String, T>`, `HashSet<T>`, `BTreeSet<T>`
-- **Host functions** — register Rust closures as JS functions with automatic type conversion (up to 8 args)
+- **Host functions** — register Rust closures as JS functions with automatic type conversion
 - **Host objects** — create JS objects backed by Rust callbacks for custom get/set/property enumeration
 - **Object manipulation** — get/set/has/delete properties, enumeration, instanceof, NativeState, prototypes
 - **Lifetime safety** — all JS values carry a `'rt` lifetime tied to their `Runtime`, preventing use-after-free at compile time
 - **Derive macros** — `#[derive(IntoJs, FromJs)]` for automatic Rust ↔ JS struct/enum conversion
 - **Ops system** — `#[hermes_op]` attribute macro for declaring host functions with auto type conversion and error propagation
-- **RuntimeConfig** — builder pattern for configuring eval, Proxy, Intl, microtask queue, JIT, async generators, and more
 
 ## Installation
 
