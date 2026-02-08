@@ -54,6 +54,7 @@ pub use value::{Value, ValueKind};
 pub use weak_object::WeakObject;
 // Re-exported so users don't need libhermesabi_sys directly.
 pub use libhermesabi_sys::HermesRuntimeConfig;
+pub use libhermesabi_sys::HermesFatalHandler;
 pub use libhermesabi_sys::HermesNativeStateFinalizer;
 pub use libhermesabi_sys::{
     HermesHostObjectFinalizer, HermesHostObjectGetCallback,
@@ -140,6 +141,13 @@ impl RuntimeConfig {
                 enable_hermes_internal: true,
                 enable_hermes_internal_test_methods: false,
                 max_num_registers: 128 * 1024,
+                enable_jit: false,
+                force_jit: false,
+                jit_threshold: 1 << 5,
+                jit_memory_limit: 32 << 20,
+                enable_async_generators: false,
+                bytecode_warmup_percent: 0,
+                randomize_memory_layout: false,
             },
         }
     }
@@ -202,6 +210,48 @@ impl RuntimeConfigBuilder {
     /// Maximum number of registers. Default: `131072` (128K).
     pub fn max_num_registers(mut self, v: u32) -> Self {
         self.raw.max_num_registers = v;
+        self
+    }
+
+    /// Enable JIT compilation. Default: `false`.
+    pub fn enable_jit(mut self, v: bool) -> Self {
+        self.raw.enable_jit = v;
+        self
+    }
+
+    /// Force JIT compilation on all functions. Default: `false`.
+    pub fn force_jit(mut self, v: bool) -> Self {
+        self.raw.force_jit = v;
+        self
+    }
+
+    /// JIT compilation threshold (number of calls before JIT'ing). Default: `32`.
+    pub fn jit_threshold(mut self, v: u32) -> Self {
+        self.raw.jit_threshold = v;
+        self
+    }
+
+    /// JIT memory limit in bytes. Default: `33554432` (32 MiB).
+    pub fn jit_memory_limit(mut self, v: u32) -> Self {
+        self.raw.jit_memory_limit = v;
+        self
+    }
+
+    /// Enable async generators in eval. Default: `false`.
+    pub fn enable_async_generators(mut self, v: bool) -> Self {
+        self.raw.enable_async_generators = v;
+        self
+    }
+
+    /// Eagerly read bytecode into page cache (0-100). Default: `0`.
+    pub fn bytecode_warmup_percent(mut self, v: u32) -> Self {
+        self.raw.bytecode_warmup_percent = v;
+        self
+    }
+
+    /// Randomize stack placement, etc. Default: `false`.
+    pub fn randomize_memory_layout(mut self, v: bool) -> Self {
+        self.raw.randomize_memory_layout = v;
         self
     }
 
@@ -437,6 +487,46 @@ impl Runtime {
         unsafe { hermes__Runtime__AsyncTriggerTimeout(self.raw) }
     }
 
+    /// Queue a microtask (function) for later execution via [`drain_microtasks`](Self::drain_microtasks).
+    pub fn queue_microtask(&self, func: &Function<'_>) -> Result<()> {
+        let ok = unsafe { hermes__Runtime__QueueMicrotask(self.raw, func.pv) };
+        if !ok {
+            return error::check_error(self.raw).map(|_| ());
+        }
+        Ok(())
+    }
+
+    /// Register this runtime for sampling profiler data collection.
+    pub fn register_for_profiling(&self) {
+        unsafe { hermes__Runtime__RegisterForProfiling(self.raw) }
+    }
+
+    /// Unregister this runtime from sampling profiler data collection.
+    pub fn unregister_for_profiling(&self) {
+        unsafe { hermes__Runtime__UnregisterForProfiling(self.raw) }
+    }
+
+    /// Load a bytecode segment (for split bundles).
+    pub fn load_segment(&self, data: &[u8], context: &Value<'_>) -> Result<()> {
+        let ok = unsafe {
+            hermes__Runtime__LoadSegment(
+                self.raw,
+                data.as_ptr(),
+                data.len(),
+                &context.raw,
+            )
+        };
+        if !ok {
+            return error::check_error(self.raw).map(|_| ());
+        }
+        Ok(())
+    }
+
+    /// Reset the timezone cache (e.g. after system timezone change).
+    pub fn reset_timezone_cache(&self) {
+        unsafe { hermes__Runtime__ResetTimezoneCache(self.raw) }
+    }
+
     /// Check if bytecode is valid Hermes bytecode.
     pub fn is_hermes_bytecode(data: &[u8]) -> bool {
         unsafe { hermes__IsHermesBytecode(data.as_ptr(), data.len()) }
@@ -471,6 +561,43 @@ impl Runtime {
     pub fn dump_sampled_trace_to_file(filename: &str) {
         let c_str = std::ffi::CString::new(filename).expect("invalid filename");
         unsafe { hermes__DumpSampledTraceToFile(c_str.as_ptr()) }
+    }
+
+    /// Set a global fatal error handler.
+    ///
+    /// # Safety
+    /// The handler function pointer must remain valid for the lifetime of the process.
+    pub unsafe fn set_fatal_handler(handler: HermesFatalHandler) {
+        unsafe { hermes__SetFatalHandler(handler) }
+    }
+
+    /// Get the bytecode epilogue from a Hermes bytecode blob.
+    /// Returns `None` if there is no epilogue.
+    pub fn get_bytecode_epilogue(data: &[u8]) -> Option<&[u8]> {
+        let mut epilogue_len: usize = 0;
+        let ptr = unsafe {
+            hermes__GetBytecodeEpilogue(data.as_ptr(), data.len(), &mut epilogue_len)
+        };
+        if ptr.is_null() || epilogue_len == 0 {
+            None
+        } else {
+            Some(unsafe { std::slice::from_raw_parts(ptr, epilogue_len) })
+        }
+    }
+
+    /// Check if the code coverage profiler is enabled.
+    pub fn is_code_coverage_profiler_enabled() -> bool {
+        unsafe { hermes__IsCodeCoverageProfilerEnabled() }
+    }
+
+    /// Enable the code coverage profiler.
+    pub fn enable_code_coverage_profiler() {
+        unsafe { hermes__EnableCodeCoverageProfiler() }
+    }
+
+    /// Disable the code coverage profiler.
+    pub fn disable_code_coverage_profiler() {
+        unsafe { hermes__DisableCodeCoverageProfiler() }
     }
 
     /// Create a temporary non-owning reference to the runtime from a raw pointer.

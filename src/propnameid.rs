@@ -84,6 +84,11 @@ impl<'rt> PropNameId<'rt> {
     pub fn equals(&self, other: &PropNameId<'rt>) -> bool {
         unsafe { hermes__PropNameID__Equals(self.rt, self.pv, other.pv) }
     }
+
+    /// Get the unique ID for this property name (Hermes-specific).
+    pub fn unique_id(&self) -> u64 {
+        unsafe { hermes__PropNameID__GetUniqueID(self.rt, self.pv) }
+    }
 }
 
 impl Drop for PropNameId<'_> {

@@ -1,11 +1,11 @@
 //! Advanced features demo — RuntimeConfig, JSON, PreparedJS, ArrayBuffer,
-//! BigInt, Scope, and time limits.
+//! BigInt, Scope, time limits, microtask queue, unique IDs, and code coverage.
 //!
 //! Run with:
 //!   cargo run --example advanced
 
 use rusty_hermes::{
-    ArrayBuffer, BigInt, PropNameId, Runtime, RuntimeConfig, Scope,
+    ArrayBuffer, BigInt, JsString, Object, PropNameId, Runtime, RuntimeConfig, Scope, Value,
 };
 
 fn main() {
@@ -31,6 +31,38 @@ fn main() {
     let key = PropNameId::from_utf8(&rt, "version");
     let version = obj.get_with_propname(&key).unwrap();
     println!("version (via PropNameId) = {}", version.as_number().unwrap());
+
+    // -- Delete property -----------------------------------------------------
+    obj.set("temp", Value::from_number(99.0)).unwrap();
+    assert!(obj.has("temp"));
+    obj.delete("temp").unwrap();
+    assert!(!obj.has("temp"));
+    println!("Delete property: OK");
+
+    // -- Computed property access (Value key) ---------------------------------
+    let arr_val = rt
+        .create_value_from_json("[10, 20, 30]")
+        .unwrap();
+    let arr_obj = arr_val.into_object().unwrap();
+    let idx = Value::from_number(1.0);
+    let elem = arr_obj.get_with_value(&idx).unwrap();
+    println!("arr[1] via Value key = {}", elem.as_number().unwrap());
+
+    // -- Unique IDs ----------------------------------------------------------
+    let obj1 = Object::new(&rt);
+    let obj2 = Object::new(&rt);
+    println!(
+        "Unique IDs: obj1={}, obj2={} (different={})",
+        obj1.unique_id(),
+        obj2.unique_id(),
+        obj1.unique_id() != obj2.unique_id()
+    );
+
+    let s1 = JsString::new(&rt, "hello");
+    println!("String unique ID: {}", s1.unique_id());
+
+    let pn = PropNameId::from_utf8(&rt, "test");
+    println!("PropNameId unique ID: {}", pn.unique_id());
 
     // -- PreparedJavaScript (compile once, run many) -------------------------
     let prepared = rt.prepare_javascript("1 + 2 + 3", "compiled.js").unwrap();
@@ -77,6 +109,11 @@ fn main() {
     let hex = big.to_js_string(16);
     println!("BigInt (hex): 0x{}", hex.to_rust_string().unwrap());
 
+    // BigInt i64 round-trip
+    let neg = BigInt::from_i64(&rt, -42);
+    assert_eq!(neg.truncate_to_i64(), -42);
+    println!("BigInt i64 round-trip: -42 = {}", neg.truncate_to_i64());
+
     // -- Scope ---------------------------------------------------------------
     {
         let _scope = Scope::new(&rt);
@@ -103,9 +140,35 @@ fn main() {
     println!("With time limit: {}", val.as_number().unwrap());
     rt.unwatch_time_limit();
 
-    // -- Drain microtasks ----------------------------------------------------
+    // -- Queue microtask & drain ---------------------------------------------
+    rt.eval("var microtaskResult = 0").unwrap();
+    let func = rt
+        .eval("(function() { microtaskResult = 123; })")
+        .unwrap()
+        .into_function()
+        .unwrap();
+    rt.queue_microtask(&func).unwrap();
     let drained = rt.drain_microtasks().unwrap();
-    println!("Microtasks drained: {drained}");
+    let result = rt.eval("microtaskResult").unwrap();
+    println!(
+        "Microtask: drained={drained}, result={}",
+        result.as_number().unwrap()
+    );
+
+    // -- Code coverage profiler ----------------------------------------------
+    println!(
+        "Code coverage profiler enabled: {}",
+        Runtime::is_code_coverage_profiler_enabled()
+    );
+
+    // -- Profiling registration ----------------------------------------------
+    rt.register_for_profiling();
+    rt.unregister_for_profiling();
+    println!("Profiling register/unregister: OK");
+
+    // -- Reset timezone cache ------------------------------------------------
+    rt.reset_timezone_cache();
+    println!("Reset timezone cache: OK");
 
     println!("\nAll advanced features working!");
 }

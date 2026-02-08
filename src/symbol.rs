@@ -27,6 +27,11 @@ impl<'rt> Symbol<'rt> {
     pub fn strict_equals(&self, other: &Symbol<'rt>) -> bool {
         unsafe { hermes__Symbol__StrictEquals(self.rt, self.pv, other.pv) }
     }
+
+    /// Get the unique ID for this symbol (Hermes-specific).
+    pub fn unique_id(&self) -> u64 {
+        unsafe { hermes__Symbol__GetUniqueID(self.rt, self.pv) }
+    }
 }
 
 impl Drop for Symbol<'_> {
