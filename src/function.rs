@@ -193,9 +193,9 @@ impl FromJsArg for String {
 macro_rules! impl_from_js_arg_via_f64 {
     ($($ty:ty),*) => { $(
         impl FromJsArg for $ty {
-            unsafe fn from_arg(rt: *mut HermesRt, raw: &HermesValue) -> Result<Self> {
+            unsafe fn from_arg(rt: *mut HermesRt, raw: &HermesValue) -> Result<Self> { unsafe {
                 f64::from_arg(rt, raw).map(|n| n as $ty)
-            }
+            }}
         }
     )* };
 }

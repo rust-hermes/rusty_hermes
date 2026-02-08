@@ -53,7 +53,7 @@ pub(crate) fn check_error(rt: *mut HermesRt) -> Result<()> {
 ///
 /// Handles: string values (direct), Error objects (.message property),
 /// and falls back to empty string for other types.
-unsafe fn extract_error_message(rt: *mut HermesRt, val: &HermesValue) -> String {
+unsafe fn extract_error_message(rt: *mut HermesRt, val: &HermesValue) -> String { unsafe {
     fn read_string_pv(rt: *mut HermesRt, pv: *const std::ffi::c_void) -> String {
         unsafe {
             let needed = hermes__String__ToUtf8(rt, pv, std::ptr::null_mut(), 0);
@@ -101,7 +101,7 @@ unsafe fn extract_error_message(rt: *mut HermesRt, val: &HermesValue) -> String 
         }
         _ => String::new(),
     }
-}
+}}
 
 /// Error type for Hermes operations.
 #[derive(Debug, Clone)]
