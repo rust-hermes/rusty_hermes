@@ -28,7 +28,7 @@ pub fn expand(input: &DeriveInput) -> TokenStream {
             }
         }
 
-        impl #impl_generics rusty_hermes::function::FromJsArg for #name #ty_generics #where_clause {
+        impl #impl_generics rusty_hermes::__private::FromJsArg for #name #ty_generics #where_clause {
             unsafe fn from_arg(
                 rt: *mut libhermesabi_sys::HermesRt,
                 raw: &libhermesabi_sys::HermesValue,

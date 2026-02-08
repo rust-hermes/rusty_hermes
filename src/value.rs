@@ -46,6 +46,18 @@ impl ValueKind {
     }
 }
 
+/// Returns `true` if the given raw kind tag represents a pointer type that
+/// needs to be explicitly released (String, Object, Symbol, BigInt).
+pub(crate) fn is_pointer_kind(kind: i32) -> bool {
+    matches!(
+        kind,
+        HermesValueKind_String
+            | HermesValueKind_Object
+            | HermesValueKind_Symbol
+            | HermesValueKind_BigInt
+    )
+}
+
 /// A JavaScript value handle tied to the lifetime of a [`Runtime`](crate::Runtime).
 ///
 /// Owns the underlying `HermesValue`. Pointer-typed values (string, object,
@@ -130,21 +142,19 @@ impl<'rt> Value<'rt> {
     /// # Safety
     /// `rt` must be a valid runtime pointer. `raw` must belong to that runtime.
     pub unsafe fn from_raw_clone(rt: *mut HermesRt, raw: &HermesValue) -> Self { unsafe {
-        match raw.kind {
-            HermesValueKind_String | HermesValueKind_Object | HermesValueKind_Symbol
-            | HermesValueKind_BigInt => {
-                let cloned = hermes__Value__Clone(rt, raw);
-                Value {
-                    raw: cloned,
-                    rt,
-                    _marker: PhantomData,
-                }
-            }
-            _ => Value {
-                raw: std::ptr::read(raw),
+        if is_pointer_kind(raw.kind) {
+            let cloned = hermes__Value__Clone(rt, raw);
+            Value {
+                raw: cloned,
                 rt,
                 _marker: PhantomData,
-            },
+            }
+        } else {
+            Value {
+                raw: *raw,
+                rt,
+                _marker: PhantomData,
+            }
         }
     }}
 
@@ -208,12 +218,10 @@ impl<'rt> Value<'rt> {
                 got: self.kind().name(),
             });
         }
-        let ptr = unsafe { self.raw.data.pointer };
-        let rt = self.rt;
-        std::mem::forget(self); // prevent double-release
+        let this = std::mem::ManuallyDrop::new(self);
         Ok(JsString {
-            pv: ptr,
-            rt,
+            pv: unsafe { this.raw.data.pointer },
+            rt: this.rt,
             _marker: PhantomData,
         })
     }
@@ -226,12 +234,10 @@ impl<'rt> Value<'rt> {
                 got: self.kind().name(),
             });
         }
-        let ptr = unsafe { self.raw.data.pointer };
-        let rt = self.rt;
-        std::mem::forget(self);
+        let this = std::mem::ManuallyDrop::new(self);
         Ok(Object {
-            pv: ptr,
-            rt,
+            pv: unsafe { this.raw.data.pointer },
+            rt: this.rt,
             _marker: PhantomData,
         })
     }
@@ -253,11 +259,10 @@ impl<'rt> Value<'rt> {
                 got: "object",
             });
         }
-        let rt = self.rt;
-        std::mem::forget(self);
+        let this = std::mem::ManuallyDrop::new(self);
         Ok(Function {
             pv: ptr,
-            rt,
+            rt: this.rt,
             _marker: PhantomData,
         })
     }
@@ -278,11 +283,10 @@ impl<'rt> Value<'rt> {
                 got: "object",
             });
         }
-        let rt = self.rt;
-        std::mem::forget(self);
+        let this = std::mem::ManuallyDrop::new(self);
         Ok(Array {
             pv: ptr,
-            rt,
+            rt: this.rt,
             _marker: PhantomData,
         })
     }
@@ -295,12 +299,10 @@ impl<'rt> Value<'rt> {
                 got: self.kind().name(),
             });
         }
-        let ptr = unsafe { self.raw.data.pointer };
-        let rt = self.rt;
-        std::mem::forget(self);
+        let this = std::mem::ManuallyDrop::new(self);
         Ok(Symbol {
-            pv: ptr,
-            rt,
+            pv: unsafe { this.raw.data.pointer },
+            rt: this.rt,
             _marker: PhantomData,
         })
     }
@@ -313,12 +315,10 @@ impl<'rt> Value<'rt> {
                 got: self.kind().name(),
             });
         }
-        let ptr = unsafe { self.raw.data.pointer };
-        let rt = self.rt;
-        std::mem::forget(self);
+        let this = std::mem::ManuallyDrop::new(self);
         Ok(BigInt {
-            pv: ptr,
-            rt,
+            pv: unsafe { this.raw.data.pointer },
+            rt: this.rt,
             _marker: PhantomData,
         })
     }
@@ -339,11 +339,10 @@ impl<'rt> Value<'rt> {
                 got: "object",
             });
         }
-        let rt = self.rt;
-        std::mem::forget(self);
+        let this = std::mem::ManuallyDrop::new(self);
         Ok(ArrayBuffer {
             pv: ptr,
-            rt,
+            rt: this.rt,
             _marker: PhantomData,
         })
     }
@@ -364,31 +363,28 @@ impl<'rt> Value<'rt> {
     /// Deep-clone this value. Creates a new `PointerValue` for pointer types.
     /// Primitive types (undefined, null, boolean, number) are copied inline.
     pub fn duplicate(&self) -> Value<'rt> {
-        match self.raw.kind {
-            HermesValueKind_String | HermesValueKind_Object | HermesValueKind_Symbol
-            | HermesValueKind_BigInt => {
-                let raw = unsafe { hermes__Value__Clone(self.rt, &self.raw) };
-                Value {
-                    raw,
-                    rt: self.rt,
-                    _marker: PhantomData,
-                }
-            }
-            // Primitives have no pointer — just copy the raw bits.
-            _ => Value {
-                raw: unsafe { std::ptr::read(&self.raw) },
+        if is_pointer_kind(self.raw.kind) {
+            let raw = unsafe { hermes__Value__Clone(self.rt, &self.raw) };
+            Value {
+                raw,
                 rt: self.rt,
                 _marker: PhantomData,
-            },
+            }
+        } else {
+            // Primitives have no pointer — just copy the raw bits.
+            Value {
+                raw: self.raw,
+                rt: self.rt,
+                _marker: PhantomData,
+            }
         }
     }
 
     /// Consume this `Value` and return the underlying `HermesValue` without
     /// running the destructor. The caller takes ownership of any pointer value.
     pub fn into_raw(self) -> HermesValue {
-        let raw = unsafe { std::ptr::read(&self.raw) };
-        std::mem::forget(self);
-        raw
+        let this = std::mem::ManuallyDrop::new(self);
+        this.raw
     }
 
     // -- comparison ------------------------------------------------------------
@@ -400,13 +396,8 @@ impl<'rt> Value<'rt> {
 
 impl Drop for Value<'_> {
     fn drop(&mut self) {
-        // Only pointer kinds need releasing.
-        match self.raw.kind {
-            HermesValueKind_String | HermesValueKind_Object | HermesValueKind_Symbol
-            | HermesValueKind_BigInt => unsafe {
-                hermes__Value__Release(&mut self.raw);
-            },
-            _ => {}
+        if is_pointer_kind(self.raw.kind) {
+            unsafe { hermes__Value__Release(&mut self.raw) };
         }
     }
 }

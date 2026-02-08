@@ -62,12 +62,14 @@ pub const HermesValueKind_Object: i32 = 7;
 /// For pointer kinds (Symbol, BigInt, String, Object), `data.pointer` holds
 /// a `PointerValue*` that must be released via the appropriate `Release` fn
 /// or `hermes__Value__Release`.
+#[derive(Copy, Clone)]
 #[repr(C)]
 pub struct HermesValue {
     pub kind: i32,
     pub data: HermesValueData,
 }
 
+#[derive(Copy, Clone)]
 #[repr(C)]
 pub union HermesValueData {
     pub boolean: bool,
