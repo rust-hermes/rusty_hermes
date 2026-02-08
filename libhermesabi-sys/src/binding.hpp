@@ -85,9 +85,7 @@ typedef struct HermesPreparedJs HermesPreparedJs;
 
 struct HermesRuntimeConfig {
   bool enable_eval;
-  bool es6_promise;
   bool es6_proxy;
-  bool es6_class;
   bool intl;
   bool microtask_queue;
   bool enable_generator;
@@ -95,7 +93,17 @@ struct HermesRuntimeConfig {
   bool enable_hermes_internal;
   bool enable_hermes_internal_test_methods;
   unsigned max_num_registers;
+  bool enable_jit;
+  bool force_jit;
+  unsigned jit_threshold;
+  unsigned jit_memory_limit;
+  bool enable_async_generators;
+  unsigned bytecode_warmup_percent;
+  bool randomize_memory_layout;
 };
+
+// Fatal handler callback signature.
+typedef void (*HermesFatalHandler)(const char* msg, size_t len);
 
 // ---------------------------------------------------------------------------
 // Runtime lifecycle
@@ -130,6 +138,9 @@ struct HermesValue hermes__Runtime__EvaluateJavaScript(
 
 // Returns: 1 = drained, 0 = more work, -1 = error (check pending error)
 int hermes__Runtime__DrainMicrotasks(HermesRt* rt, int max_hint);
+
+// Queue a microtask (function) for later execution.
+bool hermes__Runtime__QueueMicrotask(HermesRt* rt, const void* func);
 
 // Parse JSON into a JS value.
 struct HermesValue hermes__Runtime__CreateValueFromJsonUtf8(
@@ -304,6 +315,53 @@ void* hermes__Object__CreateFromHostObject(
 void* hermes__Object__GetHostObject(HermesRt* rt, const void* obj);
 bool hermes__Object__IsHostObject(HermesRt* rt, const void* obj);
 
+// Delete property
+bool hermes__Object__DeleteProperty__String(
+    HermesRt* rt,
+    const void* obj,
+    const void* name);
+
+bool hermes__Object__DeleteProperty__PropNameID(
+    HermesRt* rt,
+    const void* obj,
+    const void* name);
+
+bool hermes__Object__DeleteProperty__Value(
+    HermesRt* rt,
+    const void* obj,
+    const struct HermesValue* name);
+
+// Computed property access (Value key)
+struct HermesValue hermes__Object__GetProperty__Value(
+    HermesRt* rt,
+    const void* obj,
+    const struct HermesValue* name);
+
+bool hermes__Object__SetProperty__Value(
+    HermesRt* rt,
+    const void* obj,
+    const struct HermesValue* name,
+    const struct HermesValue* val);
+
+bool hermes__Object__HasProperty__Value(
+    HermesRt* rt,
+    const void* obj,
+    const struct HermesValue* name);
+
+// Prototype operations
+void* hermes__Object__CreateWithPrototype(
+    HermesRt* rt,
+    const struct HermesValue* prototype);
+
+bool hermes__Object__SetPrototype(
+    HermesRt* rt,
+    const void* obj,
+    const struct HermesValue* prototype);
+
+struct HermesValue hermes__Object__GetPrototype(
+    HermesRt* rt,
+    const void* obj);
+
 void hermes__Object__Release(void* pv);
 
 // ---------------------------------------------------------------------------
@@ -402,6 +460,7 @@ void* hermes__BigInt__FromUint64(HermesRt* rt, uint64_t val);
 bool hermes__BigInt__IsInt64(HermesRt* rt, const void* bi);
 bool hermes__BigInt__IsUint64(HermesRt* rt, const void* bi);
 uint64_t hermes__BigInt__Truncate(HermesRt* rt, const void* bi);
+int64_t hermes__BigInt__GetInt64(HermesRt* rt, const void* bi);
 void* hermes__BigInt__ToString(HermesRt* rt, const void* bi, int radix);
 bool hermes__BigInt__StrictEquals(
     HermesRt* rt,
@@ -435,6 +494,44 @@ void hermes__Runtime__AsyncTriggerTimeout(HermesRt* rt);
 void hermes__EnableSamplingProfiler(void);
 void hermes__DisableSamplingProfiler(void);
 void hermes__DumpSampledTraceToFile(const char* filename);
+
+// Fatal handler
+void hermes__SetFatalHandler(HermesFatalHandler handler);
+
+// Bytecode epilogue
+const uint8_t* hermes__GetBytecodeEpilogue(
+    const uint8_t* data,
+    size_t len,
+    size_t* out_epilogue_len);
+
+// Code coverage profiler
+bool hermes__IsCodeCoverageProfilerEnabled(void);
+void hermes__EnableCodeCoverageProfiler(void);
+void hermes__DisableCodeCoverageProfiler(void);
+
+// Per-runtime profiling
+void hermes__Runtime__RegisterForProfiling(HermesRt* rt);
+void hermes__Runtime__UnregisterForProfiling(HermesRt* rt);
+
+// Load bytecode segment
+bool hermes__Runtime__LoadSegment(
+    HermesRt* rt,
+    const uint8_t* data,
+    size_t len,
+    const struct HermesValue* context);
+
+// Unique IDs (Hermes-specific)
+uint64_t hermes__Object__GetUniqueID(HermesRt* rt, const void* obj);
+uint64_t hermes__String__GetUniqueID(HermesRt* rt, const void* str);
+uint64_t hermes__Symbol__GetUniqueID(HermesRt* rt, const void* sym);
+uint64_t hermes__BigInt__GetUniqueID(HermesRt* rt, const void* bi);
+uint64_t hermes__PropNameID__GetUniqueID(HermesRt* rt, const void* pni);
+uint64_t hermes__Value__GetUniqueID(
+    HermesRt* rt,
+    const struct HermesValue* val);
+
+// Reset timezone cache
+void hermes__Runtime__ResetTimezoneCache(HermesRt* rt);
 
 #ifdef __cplusplus
 } // extern "C"

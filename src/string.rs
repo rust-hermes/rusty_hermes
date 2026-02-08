@@ -85,6 +85,11 @@ impl<'rt> JsString<'rt> {
     pub fn strict_equals(&self, other: &JsString<'rt>) -> bool {
         unsafe { hermes__String__StrictEquals(self.rt, self.pv, other.pv) }
     }
+
+    /// Get the unique ID for this string (Hermes-specific).
+    pub fn unique_id(&self) -> u64 {
+        unsafe { hermes__String__GetUniqueID(self.rt, self.pv) }
+    }
 }
 
 impl Drop for JsString<'_> {

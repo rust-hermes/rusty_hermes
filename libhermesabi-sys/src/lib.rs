@@ -81,9 +81,7 @@ pub union HermesValueData {
 #[repr(C)]
 pub struct HermesRuntimeConfig {
     pub enable_eval: bool,
-    pub es6_promise: bool,
     pub es6_proxy: bool,
-    pub es6_class: bool,
     pub intl: bool,
     pub microtask_queue: bool,
     pub enable_generator: bool,
@@ -91,7 +89,18 @@ pub struct HermesRuntimeConfig {
     pub enable_hermes_internal: bool,
     pub enable_hermes_internal_test_methods: bool,
     pub max_num_registers: u32,
+    pub enable_jit: bool,
+    pub force_jit: bool,
+    pub jit_threshold: u32,
+    pub jit_memory_limit: u32,
+    pub enable_async_generators: bool,
+    pub bytecode_warmup_percent: u32,
+    pub randomize_memory_layout: bool,
 }
+
+/// Fatal handler callback signature.
+pub type HermesFatalHandler =
+    unsafe extern "C" fn(msg: *const u8, len: usize);
 
 /// Host function callback signature.
 pub type HermesHostFunctionCallback = unsafe extern "C" fn(
@@ -190,6 +199,11 @@ unsafe extern "C" {
         rt: *mut HermesRt,
         max_hint: i32,
     ) -> i32;
+
+    pub fn hermes__Runtime__QueueMicrotask(
+        rt: *mut HermesRt,
+        func: *const std::ffi::c_void,
+    ) -> bool;
 
     pub fn hermes__Runtime__CreateValueFromJsonUtf8(
         rt: *mut HermesRt,
@@ -427,6 +441,62 @@ unsafe extern "C" {
         obj: *const std::ffi::c_void,
     ) -> bool;
 
+    // Delete property
+    pub fn hermes__Object__DeleteProperty__String(
+        rt: *mut HermesRt,
+        obj: *const std::ffi::c_void,
+        name: *const std::ffi::c_void,
+    ) -> bool;
+
+    pub fn hermes__Object__DeleteProperty__PropNameID(
+        rt: *mut HermesRt,
+        obj: *const std::ffi::c_void,
+        name: *const std::ffi::c_void,
+    ) -> bool;
+
+    pub fn hermes__Object__DeleteProperty__Value(
+        rt: *mut HermesRt,
+        obj: *const std::ffi::c_void,
+        name: *const HermesValue,
+    ) -> bool;
+
+    // Computed property access (Value key)
+    pub fn hermes__Object__GetProperty__Value(
+        rt: *mut HermesRt,
+        obj: *const std::ffi::c_void,
+        name: *const HermesValue,
+    ) -> HermesValue;
+
+    pub fn hermes__Object__SetProperty__Value(
+        rt: *mut HermesRt,
+        obj: *const std::ffi::c_void,
+        name: *const HermesValue,
+        val: *const HermesValue,
+    ) -> bool;
+
+    pub fn hermes__Object__HasProperty__Value(
+        rt: *mut HermesRt,
+        obj: *const std::ffi::c_void,
+        name: *const HermesValue,
+    ) -> bool;
+
+    // Prototype operations
+    pub fn hermes__Object__CreateWithPrototype(
+        rt: *mut HermesRt,
+        prototype: *const HermesValue,
+    ) -> *mut std::ffi::c_void;
+
+    pub fn hermes__Object__SetPrototype(
+        rt: *mut HermesRt,
+        obj: *const std::ffi::c_void,
+        prototype: *const HermesValue,
+    ) -> bool;
+
+    pub fn hermes__Object__GetPrototype(
+        rt: *mut HermesRt,
+        obj: *const std::ffi::c_void,
+    ) -> HermesValue;
+
     pub fn hermes__Object__Release(pv: *mut std::ffi::c_void);
 
     // -----------------------------------------------------------------------
@@ -580,6 +650,11 @@ unsafe extern "C" {
         bi: *const std::ffi::c_void,
     ) -> u64;
 
+    pub fn hermes__BigInt__GetInt64(
+        rt: *mut HermesRt,
+        bi: *const std::ffi::c_void,
+    ) -> i64;
+
     pub fn hermes__BigInt__ToString(
         rt: *mut HermesRt,
         bi: *const std::ffi::c_void,
@@ -634,4 +709,65 @@ unsafe extern "C" {
     pub fn hermes__EnableSamplingProfiler();
     pub fn hermes__DisableSamplingProfiler();
     pub fn hermes__DumpSampledTraceToFile(filename: *const c_char);
+
+    // Fatal handler
+    pub fn hermes__SetFatalHandler(handler: HermesFatalHandler);
+
+    // Bytecode epilogue
+    pub fn hermes__GetBytecodeEpilogue(
+        data: *const u8,
+        len: usize,
+        out_epilogue_len: *mut usize,
+    ) -> *const u8;
+
+    // Code coverage profiler
+    pub fn hermes__IsCodeCoverageProfilerEnabled() -> bool;
+    pub fn hermes__EnableCodeCoverageProfiler();
+    pub fn hermes__DisableCodeCoverageProfiler();
+
+    // Per-runtime profiling
+    pub fn hermes__Runtime__RegisterForProfiling(rt: *mut HermesRt);
+    pub fn hermes__Runtime__UnregisterForProfiling(rt: *mut HermesRt);
+
+    // Load bytecode segment
+    pub fn hermes__Runtime__LoadSegment(
+        rt: *mut HermesRt,
+        data: *const u8,
+        len: usize,
+        context: *const HermesValue,
+    ) -> bool;
+
+    // Unique IDs
+    pub fn hermes__Object__GetUniqueID(
+        rt: *mut HermesRt,
+        obj: *const std::ffi::c_void,
+    ) -> u64;
+
+    pub fn hermes__String__GetUniqueID(
+        rt: *mut HermesRt,
+        str: *const std::ffi::c_void,
+    ) -> u64;
+
+    pub fn hermes__Symbol__GetUniqueID(
+        rt: *mut HermesRt,
+        sym: *const std::ffi::c_void,
+    ) -> u64;
+
+    pub fn hermes__BigInt__GetUniqueID(
+        rt: *mut HermesRt,
+        bi: *const std::ffi::c_void,
+    ) -> u64;
+
+    pub fn hermes__PropNameID__GetUniqueID(
+        rt: *mut HermesRt,
+        pni: *const std::ffi::c_void,
+    ) -> u64;
+
+    pub fn hermes__Value__GetUniqueID(
+        rt: *mut HermesRt,
+        val: *const HermesValue,
+    ) -> u64;
+
+    // Reset timezone cache
+    pub fn hermes__Runtime__ResetTimezoneCache(rt: *mut HermesRt);
 }

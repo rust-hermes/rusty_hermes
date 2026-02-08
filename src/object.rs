@@ -202,6 +202,116 @@ impl<'rt> Object<'rt> {
     pub fn is_host_object(&self) -> bool {
         unsafe { hermes__Object__IsHostObject(self.rt, self.pv) }
     }
+
+    // -- delete property -------------------------------------------------------
+
+    /// Delete a property by name.
+    pub fn delete(&self, key: &str) -> Result<()> {
+        let key_pv = unsafe {
+            hermes__String__CreateFromUtf8(self.rt, key.as_ptr(), key.len())
+        };
+        let ok = unsafe {
+            hermes__Object__DeleteProperty__String(self.rt, self.pv, key_pv)
+        };
+        unsafe { hermes__String__Release(key_pv) };
+        if !ok {
+            return check_error(self.rt).map(|_| ());
+        }
+        Ok(())
+    }
+
+    /// Delete a property using a [`PropNameId`] key.
+    pub fn delete_with_propname(&self, key: &PropNameId<'rt>) -> Result<()> {
+        let ok = unsafe {
+            hermes__Object__DeleteProperty__PropNameID(self.rt, self.pv, key.pv)
+        };
+        if !ok {
+            return check_error(self.rt).map(|_| ());
+        }
+        Ok(())
+    }
+
+    /// Delete a property using a [`Value`] key (computed property access).
+    pub fn delete_with_value(&self, key: &Value<'rt>) -> Result<()> {
+        let ok = unsafe {
+            hermes__Object__DeleteProperty__Value(self.rt, self.pv, &key.raw)
+        };
+        if !ok {
+            return check_error(self.rt).map(|_| ());
+        }
+        Ok(())
+    }
+
+    // -- computed property access (Value key) ----------------------------------
+
+    /// Get a property using a [`Value`] key (computed property access).
+    pub fn get_with_value(&self, key: &Value<'rt>) -> Result<Value<'rt>> {
+        let raw = unsafe {
+            hermes__Object__GetProperty__Value(self.rt, self.pv, &key.raw)
+        };
+        check_error(self.rt)?;
+        Ok(unsafe { Value::from_raw(self.rt, raw) })
+    }
+
+    /// Set a property using a [`Value`] key (computed property access).
+    pub fn set_with_value(&self, key: &Value<'rt>, val: Value<'rt>) -> Result<()> {
+        let ok = unsafe {
+            hermes__Object__SetProperty__Value(self.rt, self.pv, &key.raw, &val.raw)
+        };
+        if !ok {
+            return check_error(self.rt).map(|_| ());
+        }
+        Ok(())
+    }
+
+    /// Check whether a property exists using a [`Value`] key (computed property access).
+    pub fn has_with_value(&self, key: &Value<'rt>) -> bool {
+        unsafe {
+            hermes__Object__HasProperty__Value(self.rt, self.pv, &key.raw)
+        }
+    }
+
+    // -- prototype operations --------------------------------------------------
+
+    /// Create a new object with the given prototype.
+    pub fn create_with_prototype(rt: &'rt Runtime, prototype: &Value<'rt>) -> Result<Self> {
+        let pv = unsafe {
+            hermes__Object__CreateWithPrototype(rt.raw, &prototype.raw)
+        };
+        check_error(rt.raw)?;
+        Ok(Object {
+            pv,
+            rt: rt.raw,
+            _marker: PhantomData,
+        })
+    }
+
+    /// Set the prototype of this object.
+    pub fn set_prototype(&self, prototype: &Value<'rt>) -> Result<()> {
+        let ok = unsafe {
+            hermes__Object__SetPrototype(self.rt, self.pv, &prototype.raw)
+        };
+        if !ok {
+            return check_error(self.rt).map(|_| ());
+        }
+        Ok(())
+    }
+
+    /// Get the prototype of this object.
+    pub fn get_prototype(&self) -> Result<Value<'rt>> {
+        let raw = unsafe {
+            hermes__Object__GetPrototype(self.rt, self.pv)
+        };
+        check_error(self.rt)?;
+        Ok(unsafe { Value::from_raw(self.rt, raw) })
+    }
+
+    // -- unique ID (Hermes-specific) -------------------------------------------
+
+    /// Get the unique ID for this object (Hermes-specific).
+    pub fn unique_id(&self) -> u64 {
+        unsafe { hermes__Object__GetUniqueID(self.rt, self.pv) }
+    }
 }
 
 impl Drop for Object<'_> {

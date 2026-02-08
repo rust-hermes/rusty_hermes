@@ -10,7 +10,10 @@ Rust wrapper for [Hermes](https://hermesengine.dev) JavaScript engine.
 ## Quick start
 
 ```rust
-use rusty_hermes::Runtime;
+use rusty_hermes::{Runtime, hermes_op};
+
+#[hermes_op]
+fn add(a: f64, b: f64) -> f64 { a + b }
 
 let rt = Runtime::new().unwrap();
 
@@ -18,8 +21,8 @@ let rt = Runtime::new().unwrap();
 let val = rt.eval("1 + 2").unwrap();
 assert_eq!(val.as_number(), Some(3.0));
 
-// Register a host function
-rt.set_func("add", |a: f64, b: f64| -> f64 { a + b }).unwrap();
+// Register a host function and call it from JS
+add::register(&rt).unwrap();
 let result = rt.eval("add(10, 20)").unwrap();
 assert_eq!(result.as_number(), Some(30.0));
 ```
@@ -79,15 +82,18 @@ rt.eval("add_points({x: 1, y: 2}, {x: 3, y: 4})").unwrap();
 - **Rich type conversions** — `IntoJs`/`FromJs` for all numeric types, `String`, `bool`, `Option<T>`, `Vec<T>`, `HashMap<String, T>`, `BTreeMap<String, T>`, `HashSet<T>`, `BTreeSet<T>`
 - **Host functions** — register Rust closures as JS functions with automatic type conversion (up to 8 args)
 - **Host objects** — create JS objects backed by Rust callbacks for custom get/set/property enumeration
-- **Object manipulation** — get/set/has properties (string and PropNameId keys), property enumeration, instanceof, NativeState
+- **Object manipulation** — get/set/has/delete properties (string, PropNameId, and Value keys), property enumeration, instanceof, NativeState, prototype get/set/create
 - **ArrayBuffer** — create, read, and write raw byte buffers
 - **PreparedJavaScript** — pre-compile scripts for repeated evaluation
 - **Scope** — RAII handle scopes for GC pressure management
 - **WeakObject** — weak references to JS objects
-- **RuntimeConfig** — builder pattern for configuring eval, Promise, Proxy, Intl, microtask queue, etc.
+- **Microtask queue** — queue microtasks and drain them
+- **RuntimeConfig** — builder pattern for configuring eval, Proxy, Intl, microtask queue, JIT, async generators, and more
 - **Execution limits** — watch/unwatch time limits for runaway scripts
-- **Bytecode utilities** — check, validate, and prefetch Hermes bytecode
-- **Sampling profiler** — enable/disable profiling and dump traces
+- **Bytecode utilities** — check, validate, prefetch Hermes bytecode, and read bytecode epilogue
+- **Sampling profiler** — enable/disable profiling, per-runtime registration, and dump traces
+- **Code coverage profiler** — enable/disable code coverage tracking
+- **Unique IDs** — Hermes-specific unique identifiers for objects, strings, symbols, bigints, and prop names
 - **Lifetime safety** — all JS values carry a `'rt` lifetime tied to their `Runtime`, preventing use-after-free at compile time
 - **Derive macros** — `#[derive(IntoJs, FromJs)]` for automatic Rust ↔ JS struct/enum conversion
 - **Ops system** — `#[hermes_op]` attribute macro for declaring host functions with auto type conversion and error propagation
@@ -131,4 +137,5 @@ cargo run --example host_functions
 cargo run --example objects_and_arrays
 cargo run --example advanced
 cargo run --example derive
+cargo run --example prototypes
 ```

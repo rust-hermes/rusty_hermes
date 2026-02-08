@@ -392,6 +392,12 @@ impl<'rt> Value<'rt> {
     pub fn strict_equals(&self, other: &Value<'rt>) -> bool {
         unsafe { hermes__Value__StrictEquals(self.rt, &self.raw, &other.raw) }
     }
+
+    /// Get the unique ID for this value (Hermes-specific).
+    /// Only meaningful for pointer types (string, object, symbol, bigint).
+    pub fn unique_id(&self) -> u64 {
+        unsafe { hermes__Value__GetUniqueID(self.rt, &self.raw) }
+    }
 }
 
 impl Drop for Value<'_> {

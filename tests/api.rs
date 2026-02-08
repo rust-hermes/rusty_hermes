@@ -626,3 +626,219 @@ fn host_object_create() {
     let val = host_obj.get("anything").unwrap();
     assert_eq!(val.as_number(), Some(42.0));
 }
+
+// =============================================================================
+// New API coverage tests
+// =============================================================================
+
+#[test]
+fn delete_property() {
+    let rt = Runtime::new().unwrap();
+    let obj = Object::new(&rt);
+    obj.set("foo", Value::from_number(1.0)).unwrap();
+    assert!(obj.has("foo"));
+    obj.delete("foo").unwrap();
+    assert!(!obj.has("foo"));
+}
+
+#[test]
+fn delete_property_with_propname() {
+    let rt = Runtime::new().unwrap();
+    let obj = Object::new(&rt);
+    let key = PropNameId::from_utf8(&rt, "bar");
+    obj.set("bar", Value::from_number(2.0)).unwrap();
+    assert!(obj.has("bar"));
+    obj.delete_with_propname(&key).unwrap();
+    assert!(!obj.has("bar"));
+}
+
+#[test]
+fn delete_property_with_value() {
+    let rt = Runtime::new().unwrap();
+    let obj = Object::new(&rt);
+    obj.set("baz", Value::from_number(3.0)).unwrap();
+    let key = Value::from(JsString::new(&rt, "baz"));
+    obj.delete_with_value(&key).unwrap();
+    assert!(!obj.has("baz"));
+}
+
+#[test]
+fn computed_property_access() {
+    let rt = Runtime::new().unwrap();
+    // Use an array to test numeric index access via Value key
+    let val = rt.eval("[10, 20, 30]").unwrap();
+    let obj: Object = val.into_object().unwrap();
+
+    let key = Value::from_number(1.0);
+    let elem = obj.get_with_value(&key).unwrap();
+    assert_eq!(elem.as_number(), Some(20.0));
+
+    assert!(obj.has_with_value(&key));
+
+    obj.set_with_value(&key, Value::from_number(99.0)).unwrap();
+    let updated = obj.get_with_value(&key).unwrap();
+    assert_eq!(updated.as_number(), Some(99.0));
+}
+
+#[test]
+fn prototype_operations() {
+    let rt = Runtime::new().unwrap();
+    let proto = Object::new(&rt);
+    proto.set("inherited", Value::from_number(42.0)).unwrap();
+
+    let proto_val: Value = proto.into();
+    let child = Object::create_with_prototype(&rt, &proto_val).unwrap();
+
+    // Child should see inherited property
+    let val = child.get("inherited").unwrap();
+    assert_eq!(val.as_number(), Some(42.0));
+
+    // Get prototype and check it's an object
+    let retrieved_proto = child.get_prototype().unwrap();
+    assert!(retrieved_proto.is_object());
+}
+
+#[test]
+fn set_prototype() {
+    let rt = Runtime::new().unwrap();
+    let obj = Object::new(&rt);
+    let new_proto = Object::new(&rt);
+    new_proto.set("x", Value::from_number(7.0)).unwrap();
+
+    let proto_val: Value = new_proto.into();
+    obj.set_prototype(&proto_val).unwrap();
+
+    let val = obj.get("x").unwrap();
+    assert_eq!(val.as_number(), Some(7.0));
+}
+
+#[test]
+fn queue_microtask() {
+    let config = RuntimeConfig::builder().microtask_queue(true).build();
+    let rt = Runtime::with_config(config).unwrap();
+
+    // Set up a global variable and a function that modifies it
+    rt.eval("var result = 0;").unwrap();
+    let func = rt.eval("(function() { result = 42; })").unwrap();
+    let func: Function = func.into_function().unwrap();
+
+    rt.queue_microtask(&func).unwrap();
+    let drained = rt.drain_microtasks().unwrap();
+    assert!(drained);
+
+    let val = rt.eval("result").unwrap();
+    assert_eq!(val.as_number(), Some(42.0));
+}
+
+#[test]
+fn unique_id_object() {
+    let rt = Runtime::new().unwrap();
+    let obj1 = Object::new(&rt);
+    let obj2 = Object::new(&rt);
+    let id1 = obj1.unique_id();
+    let id2 = obj2.unique_id();
+    assert_ne!(id1, 0);
+    assert_ne!(id2, 0);
+    assert_ne!(id1, id2);
+}
+
+#[test]
+fn unique_id_string() {
+    let rt = Runtime::new().unwrap();
+    let s1 = JsString::new(&rt, "hello");
+    let s2 = JsString::new(&rt, "world");
+    let id1 = s1.unique_id();
+    let id2 = s2.unique_id();
+    assert_ne!(id1, 0);
+    assert_ne!(id2, 0);
+    assert_ne!(id1, id2);
+}
+
+#[test]
+fn unique_id_propnameid() {
+    let rt = Runtime::new().unwrap();
+    let p1 = PropNameId::from_utf8(&rt, "alpha");
+    let p2 = PropNameId::from_utf8(&rt, "beta");
+    let id1 = p1.unique_id();
+    let id2 = p2.unique_id();
+    assert_ne!(id1, 0);
+    assert_ne!(id2, 0);
+    assert_ne!(id1, id2);
+}
+
+#[test]
+fn bigint_get_int64() {
+    let rt = Runtime::new().unwrap();
+    let bi = BigInt::from_i64(&rt, -123);
+    assert!(bi.is_i64());
+    assert_eq!(bi.truncate_to_i64(), -123);
+}
+
+#[test]
+fn bigint_unique_id() {
+    let rt = Runtime::new().unwrap();
+    let bi1 = BigInt::from_i64(&rt, 100);
+    let bi2 = BigInt::from_i64(&rt, 200);
+    let id1 = bi1.unique_id();
+    let id2 = bi2.unique_id();
+    assert_ne!(id1, 0);
+    assert_ne!(id2, 0);
+    assert_ne!(id1, id2);
+}
+
+#[test]
+fn runtime_config_new_fields() {
+    // Just verify that creating a runtime with new config fields doesn't crash
+    let config = RuntimeConfig::builder()
+        .enable_async_generators(true)
+        .bytecode_warmup_percent(0)
+        .randomize_memory_layout(false)
+        .build();
+    let rt = Runtime::with_config(config).unwrap();
+    let val = rt.eval("1 + 1").unwrap();
+    assert_eq!(val.as_number(), Some(2.0));
+}
+
+#[test]
+fn reset_timezone_cache() {
+    let rt = Runtime::new().unwrap();
+    // Just verify it doesn't crash
+    rt.reset_timezone_cache();
+}
+
+#[test]
+fn code_coverage_profiler() {
+    // Just verify the API calls don't crash
+    let was_enabled = Runtime::is_code_coverage_profiler_enabled();
+    Runtime::enable_code_coverage_profiler();
+    assert!(Runtime::is_code_coverage_profiler_enabled());
+    Runtime::disable_code_coverage_profiler();
+    if !was_enabled {
+        assert!(!Runtime::is_code_coverage_profiler_enabled());
+    }
+}
+
+#[test]
+fn register_for_profiling() {
+    let rt = Runtime::new().unwrap();
+    // Just verify it doesn't crash
+    rt.register_for_profiling();
+    rt.unregister_for_profiling();
+}
+
+#[test]
+fn value_unique_id() {
+    let rt = Runtime::new().unwrap();
+    let val = rt.eval("({})").unwrap();
+    let id = val.unique_id();
+    assert_ne!(id, 0);
+}
+
+#[test]
+fn symbol_unique_id() {
+    let rt = Runtime::new().unwrap();
+    let val = rt.eval("Symbol('test')").unwrap();
+    let sym = val.into_symbol().unwrap();
+    let id = sym.unique_id();
+    assert_ne!(id, 0);
+}
