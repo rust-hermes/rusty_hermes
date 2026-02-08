@@ -236,3 +236,135 @@ fn trampoline_type_error_becomes_js_exception() {
     let result = rt.eval("need_num('hello')");
     assert!(result.is_err());
 }
+
+// -- Small integer types -----------------------------------------------------
+
+#[test]
+fn roundtrip_small_integers() {
+    let rt = Runtime::new().unwrap();
+
+    let val = rusty_hermes::IntoJs::into_js(42i8, &rt).unwrap();
+    assert_eq!(i8::from_js(&rt, &val).unwrap(), 42i8);
+
+    let val = rusty_hermes::IntoJs::into_js(200u8, &rt).unwrap();
+    assert_eq!(u8::from_js(&rt, &val).unwrap(), 200u8);
+
+    let val = rusty_hermes::IntoJs::into_js(-1000i16, &rt).unwrap();
+    assert_eq!(i16::from_js(&rt, &val).unwrap(), -1000i16);
+
+    let val = rusty_hermes::IntoJs::into_js(50000u16, &rt).unwrap();
+    assert_eq!(u16::from_js(&rt, &val).unwrap(), 50000u16);
+
+    let val = rusty_hermes::IntoJs::into_js(42usize, &rt).unwrap();
+    assert_eq!(usize::from_js(&rt, &val).unwrap(), 42usize);
+
+    let val = rusty_hermes::IntoJs::into_js(-7isize, &rt).unwrap();
+    assert_eq!(isize::from_js(&rt, &val).unwrap(), -7isize);
+}
+
+#[hermes_op]
+fn add_u8(a: u8, b: u8) -> u8 {
+    a + b
+}
+
+#[test]
+fn hermes_op_small_integers() {
+    let rt = Runtime::new().unwrap();
+    add_u8::register(&rt).unwrap();
+    let val = rt.eval("add_u8(10, 20)").unwrap();
+    assert_eq!(val.as_number(), Some(30.0));
+}
+
+// -- HashMap IntoJs ----------------------------------------------------------
+
+#[test]
+fn roundtrip_hashmap() {
+    let rt = Runtime::new().unwrap();
+    let mut map = std::collections::HashMap::new();
+    map.insert("x".to_string(), 10i32);
+    map.insert("y".to_string(), 20i32);
+    let val = rusty_hermes::IntoJs::into_js(map, &rt).unwrap();
+    let map2: std::collections::HashMap<String, i32> =
+        rusty_hermes::FromJs::from_js(&rt, &val).unwrap();
+    assert_eq!(map2["x"], 10);
+    assert_eq!(map2["y"], 20);
+}
+
+// -- BTreeMap ----------------------------------------------------------------
+
+#[test]
+fn roundtrip_btreemap() {
+    let rt = Runtime::new().unwrap();
+    let mut map = std::collections::BTreeMap::new();
+    map.insert("a".to_string(), 1.0f64);
+    map.insert("b".to_string(), 2.0);
+    let val = rusty_hermes::IntoJs::into_js(map, &rt).unwrap();
+    let map2: std::collections::BTreeMap<String, f64> =
+        rusty_hermes::FromJs::from_js(&rt, &val).unwrap();
+    assert_eq!(map2["a"], 1.0);
+    assert_eq!(map2["b"], 2.0);
+}
+
+// -- HashSet -----------------------------------------------------------------
+
+#[test]
+fn roundtrip_hashset() {
+    let rt = Runtime::new().unwrap();
+    let set: std::collections::HashSet<i32> = [1, 2, 3].into_iter().collect();
+    let val = rusty_hermes::IntoJs::into_js(set, &rt).unwrap();
+    let set2: std::collections::HashSet<i32> =
+        rusty_hermes::FromJs::from_js(&rt, &val).unwrap();
+    assert_eq!(set2.len(), 3);
+    assert!(set2.contains(&1));
+    assert!(set2.contains(&2));
+    assert!(set2.contains(&3));
+}
+
+// -- BTreeSet ----------------------------------------------------------------
+
+#[test]
+fn roundtrip_btreeset() {
+    let rt = Runtime::new().unwrap();
+    let set: std::collections::BTreeSet<i32> = [10, 20, 30].into_iter().collect();
+    let val = rusty_hermes::IntoJs::into_js(set, &rt).unwrap();
+    let set2: std::collections::BTreeSet<i32> =
+        rusty_hermes::FromJs::from_js(&rt, &val).unwrap();
+    assert_eq!(set2, [10, 20, 30].into_iter().collect());
+}
+
+// -- Tuples ------------------------------------------------------------------
+
+#[test]
+fn roundtrip_tuple_1() {
+    let rt = Runtime::new().unwrap();
+    let t = (42i32,);
+    let val = rusty_hermes::IntoJs::into_js(t, &rt).unwrap();
+    let t2: (i32,) = rusty_hermes::FromJs::from_js(&rt, &val).unwrap();
+    assert_eq!(t2, (42,));
+}
+
+#[test]
+fn roundtrip_tuple_2() {
+    let rt = Runtime::new().unwrap();
+    let t = (3.14f64, "hello".to_string());
+    let val = rusty_hermes::IntoJs::into_js(t, &rt).unwrap();
+    let t2: (f64, String) = rusty_hermes::FromJs::from_js(&rt, &val).unwrap();
+    assert_eq!(t2, (3.14, "hello".to_string()));
+}
+
+#[test]
+fn roundtrip_tuple_3() {
+    let rt = Runtime::new().unwrap();
+    let t = (1i32, true, "hi".to_string());
+    let val = rusty_hermes::IntoJs::into_js(t, &rt).unwrap();
+    let t2: (i32, bool, String) = rusty_hermes::FromJs::from_js(&rt, &val).unwrap();
+    assert_eq!(t2, (1, true, "hi".to_string()));
+}
+
+#[test]
+fn tuple_from_js_array() {
+    let rt = Runtime::new().unwrap();
+    let val = rt.eval("[10, 'world']").unwrap();
+    let t: (i32, String) = rusty_hermes::FromJs::from_js(&rt, &val).unwrap();
+    assert_eq!(t, (10, "world".to_string()));
+}

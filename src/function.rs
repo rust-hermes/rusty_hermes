@@ -190,11 +190,17 @@ impl FromJsArg for String {
     }
 }
 
-impl FromJsArg for i32 {
-    unsafe fn from_arg(rt: *mut HermesRt, raw: &HermesValue) -> Result<Self> {
-        f64::from_arg(rt, raw).map(|n| n as i32)
-    }
+macro_rules! impl_from_js_arg_via_f64 {
+    ($($ty:ty),*) => { $(
+        impl FromJsArg for $ty {
+            unsafe fn from_arg(rt: *mut HermesRt, raw: &HermesValue) -> Result<Self> {
+                f64::from_arg(rt, raw).map(|n| n as $ty)
+            }
+        }
+    )* };
 }
+
+impl_from_js_arg_via_f64!(f32, i8, u8, i16, u16, i32, u32, i64, u64, isize, usize);
 
 /// Convert a Rust return value into a raw `HermesValue`.
 ///
@@ -244,16 +250,20 @@ impl IntoJsRet for String {
     }
 }
 
-impl IntoJsRet for i32 {
-    unsafe fn into_ret(self, _rt: *mut HermesRt) -> Result<HermesValue> {
-        Ok(HermesValue {
-            kind: HermesValueKind_Number,
-            data: HermesValueData {
-                number: self as f64,
-            },
-        })
-    }
+macro_rules! impl_into_js_ret_via_f64 {
+    ($($ty:ty),*) => { $(
+        impl IntoJsRet for $ty {
+            unsafe fn into_ret(self, _rt: *mut HermesRt) -> Result<HermesValue> {
+                Ok(HermesValue {
+                    kind: HermesValueKind_Number,
+                    data: HermesValueData { number: self as f64 },
+                })
+            }
+        }
+    )* };
 }
+
+impl_into_js_ret_via_f64!(f32, i8, u8, i16, u16, i32, u32, i64, u64, isize, usize);
 
 impl<T: IntoJsRet> IntoJsRet for Result<T> {
     unsafe fn into_ret(self, rt: *mut HermesRt) -> Result<HermesValue> {
