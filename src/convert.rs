@@ -264,35 +264,3 @@ impl<'rt, T: FromJs<'rt> + Ord> FromJs<'rt> for std::collections::BTreeSet<T> {
     }
 }
 
-// -- Tuple IntoJs/FromJs (arities 1–8) ----------------------------------------
-
-macro_rules! impl_tuple_convert {
-    ($($idx:tt : $T:ident),+) => {
-        impl<'rt, $($T: IntoJs<'rt>),+> IntoJs<'rt> for ($($T,)+) {
-            fn into_js(self, rt: &'rt Runtime) -> Result<Value<'rt>> {
-                let count = 0 $(+ { let _ = $idx; 1 })+;
-                let arr = crate::Array::new(rt, count);
-                $(
-                    arr.set($idx, self.$idx.into_js(rt)?)?;
-                )+
-                Ok(arr.into())
-            }
-        }
-
-        impl<'rt, $($T: FromJs<'rt>),+> FromJs<'rt> for ($($T,)+) {
-            fn from_js(rt: &'rt Runtime, value: &Value<'rt>) -> Result<Self> {
-                let arr = value.duplicate().into_array()?;
-                Ok(($( $T::from_js(rt, &arr.get($idx)?)?, )+))
-            }
-        }
-    };
-}
-
-impl_tuple_convert!(0: T0);
-impl_tuple_convert!(0: T0, 1: T1);
-impl_tuple_convert!(0: T0, 1: T1, 2: T2);
-impl_tuple_convert!(0: T0, 1: T1, 2: T2, 3: T3);
-impl_tuple_convert!(0: T0, 1: T1, 2: T2, 3: T3, 4: T4);
-impl_tuple_convert!(0: T0, 1: T1, 2: T2, 3: T3, 4: T4, 5: T5);
-impl_tuple_convert!(0: T0, 1: T1, 2: T2, 3: T3, 4: T4, 5: T5, 6: T6);
-impl_tuple_convert!(0: T0, 1: T1, 2: T2, 3: T3, 4: T4, 5: T5, 6: T6, 7: T7);

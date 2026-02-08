@@ -332,39 +332,3 @@ fn roundtrip_btreeset() {
     assert_eq!(set2, [10, 20, 30].into_iter().collect());
 }
 
-// -- Tuples ------------------------------------------------------------------
-
-#[test]
-fn roundtrip_tuple_1() {
-    let rt = Runtime::new().unwrap();
-    let t = (42i32,);
-    let val = rusty_hermes::IntoJs::into_js(t, &rt).unwrap();
-    let t2: (i32,) = rusty_hermes::FromJs::from_js(&rt, &val).unwrap();
-    assert_eq!(t2, (42,));
-}
-
-#[test]
-fn roundtrip_tuple_2() {
-    let rt = Runtime::new().unwrap();
-    let t = (3.14f64, "hello".to_string());
-    let val = rusty_hermes::IntoJs::into_js(t, &rt).unwrap();
-    let t2: (f64, String) = rusty_hermes::FromJs::from_js(&rt, &val).unwrap();
-    assert_eq!(t2, (3.14, "hello".to_string()));
-}
-
-#[test]
-fn roundtrip_tuple_3() {
-    let rt = Runtime::new().unwrap();
-    let t = (1i32, true, "hi".to_string());
-    let val = rusty_hermes::IntoJs::into_js(t, &rt).unwrap();
-    let t2: (i32, bool, String) = rusty_hermes::FromJs::from_js(&rt, &val).unwrap();
-    assert_eq!(t2, (1, true, "hi".to_string()));
-}
-
-#[test]
-fn tuple_from_js_array() {
-    let rt = Runtime::new().unwrap();
-    let val = rt.eval("[10, 'world']").unwrap();
-    let t: (i32, String) = rusty_hermes::FromJs::from_js(&rt, &val).unwrap();
-    assert_eq!(t, (10, "world".to_string()));
-}
