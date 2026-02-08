@@ -81,9 +81,7 @@ pub union HermesValueData {
 #[repr(C)]
 pub struct HermesRuntimeConfig {
     pub enable_eval: bool,
-    pub es6_promise: bool,
     pub es6_proxy: bool,
-    pub es6_class: bool,
     pub intl: bool,
     pub microtask_queue: bool,
     pub enable_generator: bool,

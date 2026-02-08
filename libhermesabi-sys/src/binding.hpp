@@ -85,9 +85,7 @@ typedef struct HermesPreparedJs HermesPreparedJs;
 
 struct HermesRuntimeConfig {
   bool enable_eval;
-  bool es6_promise;
   bool es6_proxy;
-  bool es6_class;
   bool intl;
   bool microtask_queue;
   bool enable_generator;

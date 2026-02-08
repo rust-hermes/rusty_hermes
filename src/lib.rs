@@ -132,9 +132,7 @@ impl RuntimeConfig {
         RuntimeConfigBuilder {
             raw: HermesRuntimeConfig {
                 enable_eval: true,
-                es6_promise: true,
                 es6_proxy: true,
-                es6_class: false,
                 intl: true,
                 microtask_queue: false,
                 enable_generator: true,
@@ -159,21 +157,9 @@ impl RuntimeConfigBuilder {
         self
     }
 
-    /// Enable ES6 Promise support. Default: `true`.
-    pub fn es6_promise(mut self, v: bool) -> Self {
-        self.raw.es6_promise = v;
-        self
-    }
-
     /// Enable ES6 Proxy support. Default: `true`.
     pub fn es6_proxy(mut self, v: bool) -> Self {
         self.raw.es6_proxy = v;
-        self
-    }
-
-    /// Enable ES6 class support. Default: `false`.
-    pub fn es6_class(mut self, v: bool) -> Self {
-        self.raw.es6_class = v;
         self
     }
 

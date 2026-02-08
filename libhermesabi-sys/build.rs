@@ -13,10 +13,10 @@ fn main() {
     println!("cargo:rerun-if-changed=src/binding.hpp");
     println!("cargo:rerun-if-changed={}/", hermes_src_dir);
 
-    // Build Hermes via cmake, targeting libhermes (JSI implementation).
+    // Build Hermes via cmake, targeting hermesvm_a (static VM with compiler).
     // All libraries are built as static archives.
     let hermes_build = Config::new(hermes_src_dir)
-        .build_target("libhermes")
+        .build_target("hermesvm_a")
         .configure_arg("-G Ninja")
         .define("HERMES_ENABLE_EH_RTTI", "ON")
         .define("BUILD_SHARED_LIBS", "OFF")

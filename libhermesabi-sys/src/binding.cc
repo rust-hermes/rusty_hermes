@@ -427,13 +427,11 @@ HermesRt* hermes__Runtime__New(void) {
 HermesRt* hermes__Runtime__NewWithConfig(const HermesRuntimeConfig* cfg) {
   auto builder = ::hermes::vm::RuntimeConfig::Builder()
       .withEnableEval(cfg->enable_eval)
-      .withES6Promise(cfg->es6_promise)
       .withES6Proxy(cfg->es6_proxy)
-      .withES6Class(cfg->es6_class)
       .withIntl(cfg->intl)
       .withMicrotaskQueue(cfg->microtask_queue)
       .withEnableGenerator(cfg->enable_generator)
-      .withEnableBlockScoping(cfg->enable_block_scoping)
+      .withES6BlockScoping(cfg->enable_block_scoping)
       .withEnableHermesInternal(cfg->enable_hermes_internal)
       .withEnableHermesInternalTestMethods(cfg->enable_hermes_internal_test_methods)
       .withMaxNumRegisters(cfg->max_num_registers);
@@ -1359,20 +1357,26 @@ struct HermesValue hermes__Runtime__EvaluateJavaScriptWithSourceMap(
 // HermesRuntime-specific
 // ---------------------------------------------------------------------------
 
+static facebook::hermes::IHermesRootAPI* getRootAPI() {
+  static auto* api = jsi::castInterface<facebook::hermes::IHermesRootAPI>(
+      facebook::hermes::makeHermesRootAPI());
+  return api;
+}
+
 bool hermes__IsHermesBytecode(const uint8_t* data, size_t len) {
-  return facebook::hermes::HermesRuntime::isHermesBytecode(data, len);
+  return getRootAPI()->isHermesBytecode(data, len);
 }
 
 uint32_t hermes__GetBytecodeVersion(void) {
-  return facebook::hermes::HermesRuntime::getBytecodeVersion();
+  return getRootAPI()->getBytecodeVersion();
 }
 
 void hermes__PrefetchHermesBytecode(const uint8_t* data, size_t len) {
-  facebook::hermes::HermesRuntime::prefetchHermesBytecode(data, len);
+  getRootAPI()->prefetchHermesBytecode(data, len);
 }
 
 bool hermes__HermesBytecodeSanityCheck(const uint8_t* data, size_t len) {
-  return facebook::hermes::HermesRuntime::hermesBytecodeSanityCheck(data, len);
+  return getRootAPI()->hermesBytecodeSanityCheck(data, len);
 }
 
 void hermes__Runtime__WatchTimeLimit(HermesRt* hrt, uint32_t timeout_ms) {
@@ -1388,15 +1392,15 @@ void hermes__Runtime__AsyncTriggerTimeout(HermesRt* hrt) {
 }
 
 void hermes__EnableSamplingProfiler(void) {
-  facebook::hermes::HermesRuntime::enableSamplingProfiler();
+  getRootAPI()->enableSamplingProfiler();
 }
 
 void hermes__DisableSamplingProfiler(void) {
-  facebook::hermes::HermesRuntime::disableSamplingProfiler();
+  getRootAPI()->disableSamplingProfiler();
 }
 
 void hermes__DumpSampledTraceToFile(const char* filename) {
-  facebook::hermes::HermesRuntime::dumpSampledTraceToFile(std::string(filename));
+  getRootAPI()->dumpSampledTraceToFile(std::string(filename));
 }
 
 } // extern "C"
