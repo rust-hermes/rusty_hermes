@@ -59,20 +59,26 @@ fn main() {
 
     // Discover and link all static libraries produced by the Hermes build.
     // Static archives don't embed transitive dependencies, so we need to link
-    // every .a file that CMake produced (the linker discards unused symbols).
+    // every archive CMake produced (the linker discards unused symbols).
+    // MSVC's static-library archives are named "*.lib", not "*.a" — a
+    // Windows build previously found none at all here (no hard error from
+    // that alone: it only surfaces once the linker fails to resolve Hermes'
+    // own symbols, downstream of other errors that used to mask it).
+    let lib_ext = if cfg!(target_os = "windows") { "lib" } else { "a" };
     let build_path = PathBuf::from(&hermes_build_dir);
     let mut search_dirs = HashSet::new();
 
     for entry in walkdir(&build_path) {
         if let Some(ext) = entry.extension() {
-            if ext == "a" {
+            if ext == lib_ext {
                 let dir = entry.parent().unwrap();
                 if search_dirs.insert(dir.to_path_buf()) {
                     println!("cargo:rustc-link-search=native={}", dir.display());
                 }
-                // Strip the "lib" prefix and ".a" suffix to get the link name.
+                // Strip the "lib" prefix (POSIX archives only — MSVC .lib
+                // files aren't prefixed) and extension to get the link name.
                 let stem = entry.file_stem().unwrap().to_str().unwrap();
-                let name = stem.strip_prefix("lib").unwrap_or(stem);
+                let name = if cfg!(target_os = "windows") { stem } else { stem.strip_prefix("lib").unwrap_or(stem) };
                 println!("cargo:rustc-link-lib=static={}", name);
             }
         }
@@ -83,13 +89,18 @@ fn main() {
         println!("cargo:rustc-link-lib=c++");
         // Hermes's Unicode support (PlatformUnicodeCF) uses CoreFoundation.
         println!("cargo:rustc-link-lib=framework=CoreFoundation");
-    } else {
+    } else if cfg!(target_os = "linux") {
         println!("cargo:rustc-link-lib=stdc++");
         // Hermes's Unicode support (PlatformUnicodeICU) uses ICU on Linux.
         println!("cargo:rustc-link-lib=icuuc");
         println!("cargo:rustc-link-lib=icui18n");
         println!("cargo:rustc-link-lib=icudata");
     }
+    // Windows: MSVC's own C++ runtime is linked automatically (no "stdc++"
+    // by that name exists there), and CMake reported "Using Windows 10
+    // built-in ICU" — Hermes' own Windows Unicode shim is just another
+    // static archive the walk above already discovers and links, not a
+    // separate system library to name here.
 }
 
 /// Recursively walk a directory and yield all file paths.
