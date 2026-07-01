@@ -14,9 +14,16 @@ fn main() {
 
     // Build Hermes via cmake, targeting hermesvm_a (static VM with compiler).
     // All libraries are built as static archives.
+    //
+    // `.generator()` (not `.configure_arg("-G Ninja")`) — the `cmake` crate
+    // only recognizes a Ninja generator through its own `generator` field: on
+    // MSVC targets it otherwise assumes a Visual Studio generator and appends
+    // `-Thost=x64 -Ax64`, which conflicts with a Ninja generator supplied as
+    // a raw configure arg ("Generator Ninja does not support platform
+    // specification"). See cmake-rs's `Config::build()` generator handling.
     let hermes_build = Config::new(hermes_src_dir)
         .build_target("hermesvm_a")
-        .configure_arg("-G Ninja")
+        .generator("Ninja")
         .define("HERMES_ENABLE_EH_RTTI", "ON")
         .define("BUILD_SHARED_LIBS", "OFF")
         .define("HERMES_BUILD_SHARED_JSI", "OFF")
