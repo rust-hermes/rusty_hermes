@@ -43,9 +43,18 @@ fn main() {
         .include(hermes_src.join("API/jsi"))
         .include(hermes_src.join("public"))
         .include("src")
-        .flag("-std=c++17")
-        .flag("-fexceptions")
-        .flag("-frtti")
+        // `.flag()` passes these through verbatim, so the GCC/Clang spellings
+        // silently do nothing under MSVC (cl.exe warns and ignores unknown
+        // "-"-prefixed args instead of erroring) — binding.cc then compiles
+        // in whatever pre-C++17 mode cl.exe defaults to, and fails on
+        // structured bindings. `flag_if_supported` probes each spelling
+        // against the actual compiler in use, so both sides get a real flag.
+        .flag_if_supported("-std=c++17")
+        .flag_if_supported("/std:c++17")
+        .flag_if_supported("-fexceptions")
+        .flag_if_supported("/EHsc")
+        .flag_if_supported("-frtti")
+        .flag_if_supported("/GR")
         .compile("hermes_binding");
 
     // Discover and link all static libraries produced by the Hermes build.
