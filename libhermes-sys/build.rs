@@ -108,10 +108,18 @@ fn main() {
         println!("cargo:rustc-link-lib=icudata");
     }
     // Windows: MSVC's own C++ runtime is linked automatically (no "stdc++"
-    // by that name exists there), and CMake reported "Using Windows 10
-    // built-in ICU" — Hermes' own Windows Unicode shim is just another
-    // static archive the walk above already discovers and links, not a
-    // separate system library to name here.
+    // by that name exists there). CMake reporting "Using Windows 10
+    // built-in ICU" only means Hermes' PlatformUnicodeICU.cpp calls the
+    // same unorm2_*/ucol_*/udat_*/u_str* entry points ICU4C exposes,
+    // backed by the OS's own icu.dll instead of a vendored ICU — it does
+    // NOT embed that linkage into hermesvm_a.lib for us; still our job as
+    // the consumer, just under Windows' own import-library name ("icu",
+    // not "icuuc"/"icui18n"/"icudata"). SamplingProfilerSampler.cpp's
+    // high-res timer needs winmm's timeBeginPeriod/timeEndPeriod too.
+    if cfg!(target_os = "windows") {
+        println!("cargo:rustc-link-lib=icu");
+        println!("cargo:rustc-link-lib=winmm");
+    }
 }
 
 /// Recursively walk a directory and yield all file paths.
