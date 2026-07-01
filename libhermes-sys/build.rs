@@ -24,6 +24,17 @@ fn main() {
     let hermes_build = Config::new(hermes_src_dir)
         .build_target("hermesvm_a")
         .generator("Ninja")
+        // Without this, `cmake`-rs infers CMAKE_BUILD_TYPE from Cargo's own
+        // profile — "Debug" for a plain `cargo build`. On MSVC that pulls in
+        // CMake's default `/MDd` (debug CRT) flags for Hermes' own object
+        // files, while Rust's linked output always expects the release CRT
+        // (`/MD`) regardless of `--release` — the mismatch surfaces as
+        // dozens of "unresolved external symbol __imp__calloc_dbg" (and
+        // other debug-CRT-only symbols) at final link. Building the vendored
+        // Hermes in Release always sidesteps it, on every platform — a
+        // vendored C++ VM built unoptimized to match our own dev profile
+        // buys nothing (we never edit it) and would just make it slower.
+        .profile("Release")
         .define("HERMES_ENABLE_EH_RTTI", "ON")
         .define("BUILD_SHARED_LIBS", "OFF")
         .define("HERMES_BUILD_SHARED_JSI", "OFF")
